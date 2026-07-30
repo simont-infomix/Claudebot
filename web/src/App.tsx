@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
 import Container from '@mui/material/Container';
 import FormControl from '@mui/material/FormControl';
 import GlobalStyles from '@mui/material/GlobalStyles';
 import InputLabel from '@mui/material/InputLabel';
 import LinearProgress from '@mui/material/LinearProgress';
+import ListItemText from '@mui/material/ListItemText';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Select from '@mui/material/Select';
@@ -16,6 +18,7 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
+import CancelIcon from '@mui/icons-material/Cancel';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import InstallDesktopIcon from '@mui/icons-material/InstallDesktop';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -56,7 +59,8 @@ const ON_CORK = { color: '#fff9ec', textShadow: '0 1px 3px rgba(0,0,0,0.55)' };
 export function App() {
   const [todos, setTodos] = useState<TodoListItem[]>([]);
   const [repos, setRepos] = useState<RepoSummary[]>([]);
-  const [repoFilter, setRepoFilter] = useState('');
+  /** Empty = every repo; several entries show the selected repos' todos together. */
+  const [repoFilter, setRepoFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [view, setView] = useState<ViewMode>(readView);
   const [loading, setLoading] = useState(true);
@@ -74,7 +78,7 @@ export function App() {
     api.cacheFlag.stale = false;
     try {
       const [loadedTodos, loadedRepos] = await Promise.all([
-        api.fetchTodos({ repo: repoFilter, status: statusFilter }),
+        api.fetchTodos({ repos: repoFilter, status: statusFilter }),
         api.fetchRepos(),
       ]);
       setTodos(loadedTodos);
@@ -147,18 +151,40 @@ export function App() {
       spacing={2}
       sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
     >
-      <FormControl size="small" sx={{ minWidth: 220 }}>
+      <FormControl size="small" sx={{ minWidth: 220, maxWidth: { sm: 420 } }}>
         <InputLabel id="repo-filter-label">Repo</InputLabel>
         <Select
+          multiple
           labelId="repo-filter-label"
           label="Repo"
           value={repoFilter}
-          onChange={(event) => setRepoFilter(event.target.value)}
+          onChange={(event) => {
+            const value = event.target.value;
+            const next = typeof value === 'string' ? value.split(',') : value;
+            // the "Mind" entry is a clear-all, not a repo
+            setRepoFilter(next.includes('') ? [] : next);
+          }}
+          renderValue={(selected) => (
+            <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
+              {selected.map((repo) => (
+                <Chip
+                  key={repo}
+                  size="small"
+                  label={repo}
+                  onDelete={() => setRepoFilter((current) => current.filter((r) => r !== repo))}
+                  /* the icon must not reach the Select, or removing a repo would open the menu */
+                  deleteIcon={<CancelIcon onMouseDown={(event) => event.stopPropagation()} />}
+                />
+              ))}
+            </Stack>
+          )}
+          MenuProps={{ slotProps: { paper: { sx: { maxHeight: 360 } } } }}
         >
           <MenuItem value="">Mind</MenuItem>
           {repos.map((entry) => (
             <MenuItem key={entry.repo} value={entry.repo}>
-              {entry.repo} ({entry.active_count})
+              <Checkbox size="small" sx={{ mr: 1, p: 0 }} checked={repoFilter.includes(entry.repo)} />
+              <ListItemText primary={`${entry.repo} (${entry.active_count})`} />
             </MenuItem>
           ))}
         </Select>

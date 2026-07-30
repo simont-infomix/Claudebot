@@ -33,9 +33,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function fetchTodos(filter: { repo: string; status: StatusFilter }): Promise<TodoListItem[]> {
+/** An empty `repos` means every repo; several names are sent as repeated `repo` params. */
+export function fetchTodos(filter: {
+  repos: string[];
+  status: StatusFilter;
+}): Promise<TodoListItem[]> {
   const params = new URLSearchParams();
-  if (filter.repo) params.set('repo', filter.repo);
+  for (const repo of filter.repos) params.append('repo', repo);
   params.set('status', filter.status);
   return request<TodoListItem[]>(`/todos?${params.toString()}`);
 }
