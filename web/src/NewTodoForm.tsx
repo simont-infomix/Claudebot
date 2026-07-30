@@ -5,16 +5,19 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import * as api from './api';
+import { PAPER_TEXTURE, SHEET } from './board';
 import type { Todo } from './types';
 
 type Props = {
   repos: string[];
+  /** True on the post-it board: the form is rendered as a paper sheet instead of a plain card. */
+  sheet?: boolean;
   onCreated: (todo: Todo) => void;
   onCancel: () => void;
   onError: (message: string) => void;
 };
 
-export function NewTodoForm({ repos, onCreated, onCancel, onError }: Props) {
+export function NewTodoForm({ repos, sheet = false, onCreated, onCancel, onError }: Props) {
   const [repo, setRepo] = useState(repos[0] ?? '');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -40,7 +43,20 @@ export function NewTodoForm({ repos, onCreated, onCancel, onError }: Props) {
   };
 
   return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
+    <Paper
+      variant={sheet ? 'elevation' : 'outlined'}
+      elevation={sheet ? 4 : 0}
+      sx={(theme) => ({
+        p: 2,
+        ...(sheet && {
+          backgroundColor: SHEET.light,
+          backgroundImage: PAPER_TEXTURE,
+          backgroundBlendMode: 'multiply',
+          boxShadow: '0 16px 28px -16px rgba(0,0,0,0.65)',
+          ...theme.applyStyles('dark', { backgroundColor: SHEET.dark }),
+        }),
+      })}
+    >
       <Stack spacing={2}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
           <Autocomplete

@@ -20,3 +20,15 @@ export function formatRelative(timestamp: number): string {
 export function formatAbsolute(timestamp: number): string {
   return absolute.format(new Date(timestamp));
 }
+
+/** Rough markdown → plain text, for the few clamped preview lines on a note. */
+export function plainPreview(markdown: string): string {
+  return markdown
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+[.)])\s+/gm, '')
+    .replace(/[*_~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

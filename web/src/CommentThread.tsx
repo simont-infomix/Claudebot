@@ -19,11 +19,13 @@ import { Markdown } from './Markdown';
 
 type Props = {
   todoId: number;
+  /** True when the thread sits on the post-it board's paper sheet: entries become paper slips. */
+  onSheet?: boolean;
   onCountChange: (delta: number) => void;
   onError: (message: string) => void;
 };
 
-export function CommentThread({ todoId, onCountChange, onError }: Props) {
+export function CommentThread({ todoId, onSheet = false, onCountChange, onError }: Props) {
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [draft, setDraft] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -113,7 +115,17 @@ export function CommentThread({ todoId, onCountChange, onError }: Props) {
       )}
 
       {comments.map((comment) => (
-        <Paper key={comment.id} variant="outlined" sx={{ p: 1.5 }}>
+        <Paper
+          key={comment.id}
+          variant="outlined"
+          sx={(theme) => ({
+            p: 1.5,
+            ...(onSheet && {
+              backgroundColor: 'rgba(255,255,255,0.55)',
+              ...theme.applyStyles('dark', { backgroundColor: 'rgba(255,255,255,0.05)' }),
+            }),
+          })}
+        >
           {editingId === comment.id ? (
             <Stack spacing={1}>
               <TextField
