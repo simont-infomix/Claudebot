@@ -29,7 +29,11 @@ export function createApiRouter(store: TodoStore): Router {
   const router = Router();
 
   router.get('/todos', (req, res) => {
-    const repoParam = typeof req.query.repo === 'string' ? req.query.repo.trim() : '';
+    // `repo` may repeat — the UI can filter on several repos at once.
+    const repos = (Array.isArray(req.query.repo) ? req.query.repo : [req.query.repo])
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter((value) => value !== '');
     const statusParam = typeof req.query.status === 'string' ? req.query.status : '';
 
     let statuses: Status[] | undefined;
@@ -43,7 +47,7 @@ export function createApiRouter(store: TodoStore): Router {
       return badRequest(res, `Unknown status: ${statusParam}`);
     }
 
-    res.json(store.listTodos({ repo: repoParam || undefined, statuses }));
+    res.json(store.listTodos({ repos, statuses }));
   });
 
   router.post('/todos', (req, res) => {

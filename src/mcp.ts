@@ -90,7 +90,8 @@ export function createMcpServer(store: TodoStore): McpServer {
     async ({ repo, status }) => {
       const statuses: Status[] | undefined =
         status === undefined ? ACTIVE_STATUSES : status === 'all' ? undefined : [status];
-      const todos = store.listTodos({ repo: repo?.trim() || undefined, statuses });
+      const trimmedRepo = repo?.trim();
+      const todos = store.listTodos({ repos: trimmedRepo ? [trimmedRepo] : [], statuses });
 
       const text = todos.length
         ? todos.map((t) => `#${t.id} [${t.status}] (${t.repo}) ${t.title}`).join('\n')

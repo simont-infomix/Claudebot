@@ -64,6 +64,8 @@ Célja, hogy az agent lássa, mi van bent, és ne írja be kétszer ugyanazt. Be
 `http://127.0.0.1:4321`
 
 - flat lista, `repo` és státusz szűrővel; default az aktívak (nyitott + folyamatban), legfrissebb elöl
+- a `repo` szűrőben több repo is kipipálható: a kiválasztottak egymás mellett, chipként látszanak,
+  és külön-külön kivehetők (üres kiválasztás = mind)
 - egy sort lenyitva: leírás (markdown), státuszváltás `nyitott → folyamatban → lezárt`,
   bejegyzés-szál, cím/leírás szerkesztés, törlés
 - kézzel is felvehetsz todót (a `repo` mező felajánlja a már létező neveket)

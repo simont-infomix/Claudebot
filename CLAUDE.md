@@ -78,6 +78,11 @@ cork on `body` via `GlobalStyles` — which is why those bits are conditional on
 unconditional. `NewTodoForm`/`CommentThread` take an optional `sheet`/`onSheet` flag for that; without
 it they render exactly as they did before the board existed.
 
+The repo filter is a **multi-select**: checkable menu items plus deletable chips in the closed select,
+so several repos can be watched side by side and dropped one at a time (empty selection = every repo).
+It is a list all the way down — `GET /api/todos` takes a **repeated** `repo` param and `TodoStore.listTodos`
+takes `repos: string[]` (`repo IN (…)`) — so widening the filter never means filtering client-side.
+
 The UI **never polls or auto-refreshes**: todos arriving over MCP appear only after the user hits
 *Frissítés*. When an inline edit makes an item stop matching the current filter, it is kept in place
 until the next refresh rather than disappearing mid-interaction.

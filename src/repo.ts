@@ -62,13 +62,14 @@ function toComment(row: Row): Comment {
 export class TodoStore {
   constructor(private readonly db: DatabaseSync) {}
 
-  listTodos(filter: { repo?: string; statuses?: Status[] } = {}): TodoListItem[] {
+  /** `repos` is an OR over repo names; empty or omitted means every repo. */
+  listTodos(filter: { repos?: string[]; statuses?: Status[] } = {}): TodoListItem[] {
     const where: string[] = [];
     const params: (string | number)[] = [];
 
-    if (filter.repo) {
-      where.push('t.repo = ?');
-      params.push(filter.repo);
+    if (filter.repos && filter.repos.length > 0) {
+      where.push(`t.repo IN (${filter.repos.map(() => '?').join(', ')})`);
+      params.push(...filter.repos);
     }
     if (filter.statuses && filter.statuses.length > 0) {
       where.push(`t.status IN (${filter.statuses.map(() => '?').join(', ')})`);
