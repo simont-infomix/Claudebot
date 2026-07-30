@@ -1,6 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { ALLOWED_HOSTS, DB_PATH, HOST, PORT, WEB_DIR } from './config.js';
 import { openDb } from './db.js';
 import { TodoStore } from './repo.js';
@@ -71,9 +71,26 @@ app.use('/api', createApiRouter(store));
 const webRoot = join(import.meta.dirname, WEB_DIR);
 const indexHtml = join(webRoot, 'index.html');
 
-app.use(express.static(webRoot));
+/**
+ * Vite fingerprints everything under /assets, so those may be cached forever. Whatever keeps its URL
+ * across builds — the shell, the service worker, the manifest, the icons — must be revalidated, or
+ * an installed app could get stuck on an old build.
+ */
+app.use(
+  express.static(webRoot, {
+    setHeaders(res, filePath) {
+      const fingerprinted = filePath.includes(`${sep}assets${sep}`);
+      res.setHeader(
+        'Cache-Control',
+        fingerprinted ? 'public, max-age=31536000, immutable' : 'no-cache',
+      );
+    },
+  }),
+);
+
 app.use((req, res, next) => {
   if (req.method !== 'GET' || req.path.startsWith('/api') || req.path === '/mcp') return next();
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(indexHtml, (error) => {
     if (error) {
       res

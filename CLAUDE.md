@@ -20,6 +20,7 @@ npm run build      # tsc (server → dist/) + tsc --noEmit (web typecheck) + vit
 npm start          # serves API + MCP + built SPA on http://127.0.0.1:4321
 npm run dev:server # same, with node --watch over dist/ (needs a build first)
 npm run dev:web    # Vite dev server with HMR, proxies /api to the running server
+npm run icons      # regenerate the PWA icons in web/public (see tools/make-icons.mjs)
 ```
 
 There is no test suite and no linter. `npm run build` is the only check — it typechecks both source
@@ -80,6 +81,34 @@ it they render exactly as they did before the board existed.
 The UI **never polls or auto-refreshes**: todos arriving over MCP appear only after the user hits
 *Frissítés*. When an inline edit makes an item stop matching the current filter, it is kept in place
 until the next refresh rather than disappearing mid-interaction.
+
+### Installable app (PWA)
+
+The SPA is installable, and that is a deliberate part of the product: the server does not start
+automatically, so an installed app that opens from cache and *says* the server is down beats a
+browser error page.
+
+- `web/public/` holds the `manifest.webmanifest` and the icons. The PNGs are committed but generated
+  by `tools/make-icons.mjs` (`npm run icons`) — a hand-rolled rasteriser + PNG encoder, no image
+  deps, no downloads, matching the cork/post-it look. Edit the script, not the PNGs.
+- `web/sw.js` is the service worker **template**, plain JS and outside the typecheck (it runs in
+  worker scope). The `serviceWorker()` plugin in `vite.config.ts` substitutes the precache list (the
+  hashed asset names are only known at bundle time) and a version hashed from everything precached,
+  then emits `dist/web/sw.js`. Both placeholders are substituted with `replaceAll`, and the plugin
+  errors if nothing was replaced — so do not mention them verbatim in prose inside `sw.js`.
+- Strategies: cache-first for fingerprinted assets, network-first for navigations (falling back to
+  the precached shell) and for `/api/*` GETs (falling back to the last successful response).
+  `/mcp` and every non-GET is passed straight through — agent traffic and writes are never cached.
+- A cache-served API response gets an `X-Todo-Mcp-Cached` header; `web/src/api.ts` turns that into
+  `cacheFlag.stale`, which `App` clears before a load and reads after, and shows as a warning chip.
+  Stale todos must never look current.
+- `web/src/pwa.ts` owns registration (production builds only, so `dev:web` keeps its HMR), the
+  `beforeinstallprompt` capture behind the header's *Telepítés* button, and the waiting-worker
+  handshake that `UpdateSnackbar` offers. Updates are applied only when the user accepts — a
+  self-triggered reload could eat an edit in progress.
+- `src/server.ts` sends `Cache-Control: immutable` only for `/assets/*`; everything that keeps its
+  URL across builds (shell, worker, manifest, icons) is `no-cache`, otherwise an installed app can
+  get stuck on an old build.
 
 `web/src/board.ts` owns the board's look: note paper colour per status (yellow/blue/green — the wall is
 meant to be glanceable), ink colour, the deterministic per-id tilt and pin colour, and the cork and

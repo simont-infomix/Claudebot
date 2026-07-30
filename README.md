@@ -69,13 +69,33 @@ Célja, hogy az agent lássa, mi van bent, és ne írja be kétszer ugyanazt. Be
 - kézzel is felvehetsz todót (a `repo` mező felajánlja a már létező neveket)
 - **nincs automatikus frissítés**: a közben MCP-n bejött todókhoz nyomd meg a *Frissítés* gombot
 
+## Telepítés alkalmazásként
+
+A UI telepíthető webalkalmazás (PWA), így külön ablakban, saját ikonnal indul, böngészősáv nélkül.
+
+- **Telepítés**: nyisd meg a `http://127.0.0.1:4321`-et, és nyomd meg a fejlécben a *Telepítés*
+  gombot (vagy Chrome/Edge: címsor jobb szélén a telepítés ikon → *Telepítés*). A loopback origó
+  biztonságos kontextusnak számít, ezért nem kell HTTPS.
+- **Eltávolítás**: az alkalmazás ablakában `⋮` → *Eltávolítás*, vagy Windows *Alkalmazások* lista.
+- **Ha nem fut a szerver**: az app így is elindul a mentett állapotból, és a fejlécben jelzi, hogy
+  *Mentett adatok – a szerver nem fut*. Szerkeszteni ilyenkor nem lehet (a mentés hibát ad),
+  a mentett todók csak olvashatók. Indítsd el az `npm start`-ot, majd *Frissítés*.
+- **Új verzió**: build után az app alján felajánlja az *Újratöltés*t; sosem tölt újra magától.
+
+Semmi nem töltődik le a hálózatról: az ikonok, a betűkészlet-stack és a textúrák mind helyben
+készülnek, így az app offline is ugyanúgy néz ki.
+
 ## Fejlesztés
 
 ```bash
 npm start        # szerver (API + MCP), a buildelt UI-t is kiszolgálja
 npm run dev:web  # Vite dev szerver HMR-rel, /api proxyval a fenti szerverre
 npm run build    # tsc (szerver) + tsc --noEmit (web) + vite build
+npm run icons    # PWA ikonok újragenerálása (web/public/*.png)
 ```
+
+A service worker csak a buildelt appban regisztrálódik, `dev:web` alatt nem — így a HMR-t nem
+zavarja cache.
 
 Nincs automata teszt; a típusellenőrzés a `npm run build`-ban fut.
 

@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.server.json && tsc -p web/tsconfig.json --noEmit && vite build",
     "start": "node --disable-warning=ExperimentalWarning dist/server.js",
     "dev:server": "node --watch --disable-warning=ExperimentalWarning dist/server.js",
-    "dev:web": "vite"
+    "dev:web": "vite",
+    "icons": "node tools/make-icons.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

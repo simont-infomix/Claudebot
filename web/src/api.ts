@@ -1,10 +1,25 @@
 import type { Comment, RepoSummary, Status, StatusFilter, Todo, TodoListItem } from './types';
 
+/**
+ * Set by `request` when the service worker answered from its cache because the server was
+ * unreachable. The caller clears it before a load and reads it after — so it means "something on
+ * screen is stale", which is exactly what the UI badge says.
+ */
+export const cacheFlag = { stale: false };
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    ...init,
-    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      ...init,
+      headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
+    });
+  } catch {
+    // Network-level failure: the server is down (writes are not served from the cache at all).
+    throw new Error('A szerver nem érhető el.');
+  }
+
+  if (response.headers.get('X-Todo-Mcp-Cached')) cacheFlag.stale = true;
 
   if (!response.ok) {
     const message = await response

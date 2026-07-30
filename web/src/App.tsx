@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import Container from '@mui/material/Container';
 import FormControl from '@mui/material/FormControl';
 import GlobalStyles from '@mui/material/GlobalStyles';
@@ -15,6 +16,8 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
+import CloudOffIcon from '@mui/icons-material/CloudOff';
+import InstallDesktopIcon from '@mui/icons-material/InstallDesktop';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
@@ -23,6 +26,7 @@ import { NewTodoForm } from './NewTodoForm';
 import { TodoNote } from './TodoNote';
 import { TodoRow } from './TodoRow';
 import { CORK_DARK, CORK_LIGHT, HAND_FONT, INK, NOTE_PAPER, PAPER_TEXTURE } from './board';
+import { useInstallPrompt, useOnline } from './pwa';
 import type { RepoSummary, StatusFilter, Todo, TodoListItem } from './types';
 
 const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
@@ -58,11 +62,16 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  /** True when the service worker served the last load from its cache (server down / no network). */
+  const [stale, setStale] = useState(false);
+  const install = useInstallPrompt();
+  const online = useOnline();
 
   const board = view === 'board';
 
   const load = useCallback(async () => {
     setLoading(true);
+    api.cacheFlag.stale = false;
     try {
       const [loadedTodos, loadedRepos] = await Promise.all([
         api.fetchTodos({ repo: repoFilter, status: statusFilter }),
@@ -74,6 +83,7 @@ export function App() {
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
+      setStale(api.cacheFlag.stale);
       setLoading(false);
     }
   }, [repoFilter, statusFilter]);
@@ -223,6 +233,16 @@ export function App() {
             </Typography>
           </Box>
 
+          {/* the shell keeps working without the server, but then the data on screen is the cached one */}
+          {(stale || !online) && (
+            <Chip
+              size="small"
+              color="warning"
+              icon={<CloudOffIcon />}
+              label={online ? 'Mentett adatok – a szerver nem fut' : 'Offline – mentett adatok'}
+            />
+          )}
+
           <ToggleButtonGroup
             exclusive
             size="small"
@@ -254,6 +274,16 @@ export function App() {
             </ToggleButton>
           </ToggleButtonGroup>
 
+          {/* only shown while the browser considers the app installable — gone once it is installed */}
+          {install && (
+            <Button
+              startIcon={<InstallDesktopIcon />}
+              onClick={() => void install()}
+              sx={board ? ON_CORK : undefined}
+            >
+              Telepítés
+            </Button>
+          )}
           <Button
             startIcon={<RefreshIcon />}
             onClick={() => void load()}

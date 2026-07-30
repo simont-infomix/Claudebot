@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { App } from './App';
+import { UpdateSnackbar } from './UpdateSnackbar';
 
 const theme = createTheme({
   cssVariables: true,
@@ -18,6 +19,7 @@ createRoot(container).render(
     <ThemeProvider theme={theme} defaultMode="system">
       <CssBaseline />
       <App />
+      <UpdateSnackbar />
     </ThemeProvider>
   </StrictMode>,
 );
