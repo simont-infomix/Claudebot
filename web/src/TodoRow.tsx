@@ -23,20 +23,31 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import * as api from './api';
 import { CommentThread } from './CommentThread';
 import { Markdown } from './Markdown';
+import { RepoPicker } from './RepoPicker';
 import { formatAbsolute, formatRelative } from './format';
 import { STATUS_COLORS, STATUS_LABELS, STATUSES, type Status, type Todo, type TodoListItem } from './types';
 
 type Props = {
   todo: TodoListItem;
+  /** Repo names already in use, offered while editing. */
+  repoOptions: string[];
   onChange: (todo: Todo) => void;
   onDelete: (id: number) => void;
   onCommentCountChange: (id: number, delta: number) => void;
   onError: (message: string) => void;
 };
 
-export function TodoRow({ todo, onChange, onDelete, onCommentCountChange, onError }: Props) {
+export function TodoRow({
+  todo,
+  repoOptions,
+  onChange,
+  onDelete,
+  onCommentCountChange,
+  onError,
+}: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [reposDraft, setReposDraft] = useState(todo.repos);
   const [titleDraft, setTitleDraft] = useState(todo.title);
   const [descriptionDraft, setDescriptionDraft] = useState(todo.description);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -59,6 +70,7 @@ export function TodoRow({ todo, onChange, onDelete, onCommentCountChange, onErro
   };
 
   const startEdit = () => {
+    setReposDraft(todo.repos);
     setTitleDraft(todo.title);
     setDescriptionDraft(todo.description);
     setEditing(true);
@@ -66,9 +78,15 @@ export function TodoRow({ todo, onChange, onDelete, onCommentCountChange, onErro
 
   const saveEdit = () => {
     const title = titleDraft.trim();
-    if (!title) return;
+    if (!title || reposDraft.length === 0) return;
     void run(async () => {
-      onChange(await api.updateTodo(todo.id, { title, description: descriptionDraft }));
+      onChange(
+        await api.updateTodo(todo.id, {
+          repos: reposDraft,
+          title,
+          description: descriptionDraft,
+        }),
+      );
       setEditing(false);
     });
   };
@@ -106,8 +124,11 @@ export function TodoRow({ todo, onChange, onDelete, onCommentCountChange, onErro
           >
             {todo.title}
           </Typography>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <Chip label={todo.repo} size="small" variant="outlined" />
+          {/* several repo chips can be on one row, so let them wrap instead of squeezing the title */}
+          <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            {todo.repos.map((repo) => (
+              <Chip key={repo} label={repo} size="small" variant="outlined" />
+            ))}
             <Chip
               label={STATUS_LABELS[todo.status]}
               size="small"
@@ -132,6 +153,13 @@ export function TodoRow({ todo, onChange, onDelete, onCommentCountChange, onErro
         <Stack spacing={2}>
           {editing ? (
             <Stack spacing={1}>
+              <RepoPicker
+                value={reposDraft}
+                options={repoOptions}
+                onChange={setReposDraft}
+                disabled={busy}
+                helperText="Egy todo több repóhoz is tartozhat"
+              />
               <TextField
                 label="Cím"
                 size="small"
@@ -155,7 +183,7 @@ export function TodoRow({ todo, onChange, onDelete, onCommentCountChange, onErro
                 <Button
                   size="small"
                   variant="contained"
-                  disabled={busy || !titleDraft.trim()}
+                  disabled={busy || !titleDraft.trim() || reposDraft.length === 0}
                   onClick={saveEdit}
                 >
                   Mentés

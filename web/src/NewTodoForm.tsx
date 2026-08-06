@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import Autocomplete from '@mui/material/Autocomplete';
 import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import * as api from './api';
+import { RepoPicker } from './RepoPicker';
 import { PAPER_TEXTURE, SHEET } from './board';
 import type { Todo } from './types';
 
 type Props = {
+  /** Existing repo names, offered as suggestions. */
   repos: string[];
   /** True on the post-it board: the form is rendered as a paper sheet instead of a plain card. */
   sheet?: boolean;
@@ -18,17 +19,17 @@ type Props = {
 };
 
 export function NewTodoForm({ repos, sheet = false, onCreated, onCancel, onError }: Props) {
-  const [repo, setRepo] = useState(repos[0] ?? '');
+  const [selectedRepos, setSelectedRepos] = useState<string[]>(repos[0] ? [repos[0]] : []);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    if (!repo.trim() || !title.trim()) return;
+    if (selectedRepos.length === 0 || !title.trim()) return;
     setBusy(true);
     try {
       const created = await api.createTodo({
-        repo: repo.trim(),
+        repos: selectedRepos,
         title: title.trim(),
         description,
       });
@@ -59,16 +60,11 @@ export function NewTodoForm({ repos, sheet = false, onCreated, onCancel, onError
     >
       <Stack spacing={2}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-          <Autocomplete
-            freeSolo
+          <RepoPicker
+            value={selectedRepos}
             options={repos}
-            value={repo}
-            onChange={(_event, value) => setRepo(value ?? '')}
-            onInputChange={(_event, value) => setRepo(value)}
-            sx={{ minWidth: 220 }}
-            renderInput={(params) => (
-              <TextField {...params} label="Repo" size="small" required helperText="Mappa rövid neve" />
-            )}
+            onChange={setSelectedRepos}
+            helperText="Mappa rövid neve; több is megadható"
           />
           <TextField
             label="Cím"
@@ -93,7 +89,7 @@ export function NewTodoForm({ repos, sheet = false, onCreated, onCancel, onError
           <Button onClick={onCancel}>Mégse</Button>
           <Button
             variant="contained"
-            disabled={busy || !repo.trim() || !title.trim()}
+            disabled={busy || selectedRepos.length === 0 || !title.trim()}
             onClick={() => void submit()}
           >
             Hozzáadás

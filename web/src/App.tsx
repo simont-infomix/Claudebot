@@ -127,18 +127,22 @@ export function App() {
   const handleCreated = (created: Todo) => {
     setShowForm(false);
     setTodos((current) => [{ ...created, comment_count: 0 }, ...current]);
-    setRepos((current) =>
-      current.some((entry) => entry.repo === created.repo)
-        ? current
-        : [...current, { repo: created.repo, active_count: 1 }].sort((a, b) =>
-            a.repo.localeCompare(b.repo, 'hu'),
-          ),
-    );
+    // A brand new repo name has to reach the filter and the pickers without a round trip.
+    setRepos((current) => {
+      const missing = created.repos.filter((repo) => !current.some((entry) => entry.repo === repo));
+      if (missing.length === 0) return current;
+      return [...current, ...missing.map((repo) => ({ repo, active_count: 1 }))].sort((a, b) =>
+        a.repo.localeCompare(b.repo, 'hu'),
+      );
+    });
   };
 
   const activeCount = todos.filter((todo) => todo.status !== 'closed').length;
 
+  const repoOptions = repos.map((entry) => entry.repo);
+
   const itemProps = {
+    repoOptions,
     onChange: handleChange,
     onDelete: handleDelete,
     onCommentCountChange: handleCommentCountChange,
@@ -337,7 +341,7 @@ export function App() {
 
         {showForm && (
           <NewTodoForm
-            repos={repos.map((entry) => entry.repo)}
+            repos={repoOptions}
             sheet={board}
             onCreated={handleCreated}
             onCancel={() => setShowForm(false)}

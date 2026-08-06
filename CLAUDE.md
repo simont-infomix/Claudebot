@@ -6,8 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An MCP server plus a small React web app for parking questions that come up while a coding agent
 works but need a **human decision**. The agent files items with `add_todo` and moves on; the human
-triages them in the browser. There is deliberately **no feedback path back to the agent** — the tool
-returns only a confirmation, and `list_todos` never exposes the human's comments or decisions.
+triages them in the browser. There is deliberately **no push back to the agent** — `add_todo` returns
+only a confirmation and `list_todos` never exposes the human's comments or decisions, so nothing an
+agent does here can turn into waiting for an answer. `get_ticket(id)` is the one **pull**: when the
+human tells an agent "do #12", it can read that item in full, comments included.
 
 `specification.md` is the original (Hungarian) sketch; `README.md` is the user-facing doc, also in
 Hungarian. The UI strings are Hungarian; all code, comments and identifiers are English.
@@ -44,13 +46,23 @@ The key structural rule: **all SQL lives in `TodoStore` (`src/repo.ts`)**, and b
 (`src/mcp.ts`) and the JSON API (`src/api.ts`) go through it. Neither writes SQL directly. `repo.ts`
 also owns the `Status` union and `ACTIVE_STATUSES`.
 
-Data model (`src/db.ts`, schema applied idempotently on every open): `todos` (repo, title,
-description, status ∈ `open|in_progress|closed`, timestamps as epoch ms) and `comments` with
-`ON DELETE CASCADE`. Writing or editing a comment also bumps the parent todo's `updated_at`, since
-lists are ordered `updated_at DESC` — activity floats an item to the top.
+Data model (`src/db.ts`, schema applied idempotently on every open): `todos` (title, description,
+status ∈ `open|in_progress|closed`, timestamps as epoch ms), `todo_repos` and `comments`, the latter
+two with `ON DELETE CASCADE`. Writing or editing a comment also bumps the parent todo's `updated_at`,
+since lists are ordered `updated_at DESC` — activity floats an item to the top; so does re-pinning an
+item to other repos.
+
+Repo membership is **many-to-many**, and that asymmetry is the point: an agent files under exactly
+one repo (`add_todo` takes a single `repo` string), while the human can pin an item to several in the
+UI. `todo_repos` is the only source of truth — `todos.repo` is gone, and `openDb` migrates an old
+database by copying that column into `todo_repos` and dropping it (detected by the column still
+existing, so it runs once). Membership order is `rowid` order, i.e. the order last submitted;
+`TodoStore.setRepos` rewrites the set wholesale. Repo lists reach JS as a `json_group_array`
+sub-select (`REPOS_JSON` in `repo.ts`), so one row still carries one todo — filtering is an `EXISTS`,
+never a join that could duplicate rows.
 
 Storage is a **single global SQLite file** at `~/.todo-mcp/todos.db` (override with `TODO_MCP_DB`),
-shared across all projects; the `repo` column is the only separation. `repo` is expected to be the
+shared across all projects; repo membership is the only separation. A repo name is expected to be the
 basename of the project folder, and consistency depends on the agent spelling it the same each time —
 hence the emphasis in the `add_todo` tool description.
 
@@ -81,7 +93,14 @@ it they render exactly as they did before the board existed.
 The repo filter is a **multi-select**: checkable menu items plus deletable chips in the closed select,
 so several repos can be watched side by side and dropped one at a time (empty selection = every repo).
 It is a list all the way down — `GET /api/todos` takes a **repeated** `repo` param and `TodoStore.listTodos`
-takes `repos: string[]` (`repo IN (…)`) — so widening the filter never means filtering client-side.
+takes `repos: string[]` — so widening the filter never means filtering client-side.
+
+Assigning repos is `RepoPicker`, one free-solo multi-Autocomplete shared by `NewTodoForm`, `TodoRow`
+and `TodoDetailDialog` (the last two get the suggestions through `repoOptions`, threaded down from
+`App`'s `itemProps`). Free-solo because an item can be pinned to a project that has no todos yet.
+**A todo must keep at least one repo**: the pickers disable Save on an empty list, `POST`/`PATCH`
+answer 400, and `setRepos` ignores an empty set — a repo-less todo would be invisible under every
+filter. The board note has no room for a list, so it shows `first +N` with the rest in a tooltip.
 
 The UI **never polls or auto-refreshes**: todos arriving over MCP appear only after the user hits
 *Frissítés*. When an inline edit makes an item stop matching the current filter, it is kept in place
@@ -130,7 +149,8 @@ both schemes.
   new columns going through the `toTodo`/`toComment` mappers rather than casting rows inline.
 - MCP tool descriptions are long, deliberate prose (`ADD_TODO_DESCRIPTION` in `src/mcp.ts`): they are
   what stops an agent from treating this as its own scratch todo list or expecting an answer back.
-  Treat them as product surface, not comments.
+  `GET_TICKET_DESCRIPTION` carries the same weight — it has to say "pull, on the user's cue" clearly
+  enough that no agent starts polling it for a reply. Treat them as product surface, not comments.
 - The MCP registration is user-scoped and shared by every project:
   `claude mcp add --transport http todo-mcp http://127.0.0.1:4321/mcp --scope user`. The server does
   not start automatically; if it is down, MCP calls simply fail.

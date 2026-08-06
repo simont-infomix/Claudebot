@@ -49,7 +49,7 @@ export function fetchRepos(): Promise<RepoSummary[]> {
 }
 
 export function createTodo(input: {
-  repo: string;
+  repos: string[];
   title: string;
   description: string;
 }): Promise<Todo> {
@@ -58,7 +58,7 @@ export function createTodo(input: {
 
 export function updateTodo(
   id: number,
-  patch: { title?: string; description?: string; status?: Status },
+  patch: { repos?: string[]; title?: string; description?: string; status?: Status },
 ): Promise<Todo> {
   return request<Todo>(`/todos/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
 }

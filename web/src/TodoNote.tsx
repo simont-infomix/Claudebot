@@ -19,6 +19,8 @@ import { STATUS_LABELS, type Todo, type TodoListItem } from './types';
 
 type Props = {
   todo: TodoListItem;
+  /** Repo names already in use, offered while editing in the dialog. */
+  repoOptions: string[];
   onChange: (todo: Todo) => void;
   onDelete: (id: number) => void;
   onCommentCountChange: (id: number, delta: number) => void;
@@ -26,7 +28,14 @@ type Props = {
 };
 
 /** One sticky note on the wall. Clicking it opens the full item in a dialog. */
-export function TodoNote({ todo, onChange, onDelete, onCommentCountChange, onError }: Props) {
+export function TodoNote({
+  todo,
+  repoOptions,
+  onChange,
+  onDelete,
+  onCommentCountChange,
+  onError,
+}: Props) {
   const [open, setOpen] = useState(false);
 
   const paper = NOTE_PAPER[todo.status];
@@ -113,19 +122,23 @@ export function TodoNote({ todo, onChange, onDelete, onCommentCountChange, onErr
           >
             #{todo.id}
           </Typography>
-          <Typography
-            variant="caption"
-            sx={{
-              color: INK_SOFT,
-              maxWidth: '70%',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
-            }}
-          >
-            {todo.repo}
-          </Typography>
+          {/* the whole list only fits on the widest notes, so the full one lives in the tooltip */}
+          <Tooltip title={todo.repos.length > 1 ? todo.repos.join(', ') : ''}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: INK_SOFT,
+                maxWidth: '70%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+              }}
+            >
+              {todo.repos[0]}
+              {todo.repos.length > 1 ? ` +${todo.repos.length - 1}` : ''}
+            </Typography>
+          </Tooltip>
         </Stack>
 
         <Typography
@@ -204,6 +217,7 @@ export function TodoNote({ todo, onChange, onDelete, onCommentCountChange, onErr
       <TodoDetailDialog
         open={open}
         todo={todo}
+        repoOptions={repoOptions}
         onClose={() => setOpen(false)}
         onChange={onChange}
         onDelete={onDelete}

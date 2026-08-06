@@ -19,6 +19,7 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import * as api from './api';
 import { CommentThread } from './CommentThread';
 import { Markdown } from './Markdown';
+import { RepoPicker } from './RepoPicker';
 import { HAND_FONT, NOTE_PAPER, PAPER_TEXTURE, SHEET } from './board';
 import { formatAbsolute } from './format';
 import { STATUS_LABELS, STATUSES, type Status, type Todo, type TodoListItem } from './types';
@@ -26,6 +27,8 @@ import { STATUS_LABELS, STATUSES, type Status, type Todo, type TodoListItem } fr
 type Props = {
   open: boolean;
   todo: TodoListItem;
+  /** Repo names already in use, offered while editing. */
+  repoOptions: string[];
   onClose: () => void;
   onChange: (todo: Todo) => void;
   onDelete: (id: number) => void;
@@ -37,6 +40,7 @@ type Props = {
 export function TodoDetailDialog({
   open,
   todo,
+  repoOptions,
   onClose,
   onChange,
   onDelete,
@@ -44,6 +48,7 @@ export function TodoDetailDialog({
   onError,
 }: Props) {
   const [editing, setEditing] = useState(false);
+  const [reposDraft, setReposDraft] = useState(todo.repos);
   const [titleDraft, setTitleDraft] = useState(todo.title);
   const [descriptionDraft, setDescriptionDraft] = useState(todo.description);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -71,6 +76,7 @@ export function TodoDetailDialog({
   };
 
   const startEdit = () => {
+    setReposDraft(todo.repos);
     setTitleDraft(todo.title);
     setDescriptionDraft(todo.description);
     setEditing(true);
@@ -78,9 +84,15 @@ export function TodoDetailDialog({
 
   const saveEdit = () => {
     const title = titleDraft.trim();
-    if (!title) return;
+    if (!title || reposDraft.length === 0) return;
     void run(async () => {
-      onChange(await api.updateTodo(todo.id, { title, description: descriptionDraft }));
+      onChange(
+        await api.updateTodo(todo.id, {
+          repos: reposDraft,
+          title,
+          description: descriptionDraft,
+        }),
+      );
       setEditing(false);
     });
   };
@@ -124,7 +136,7 @@ export function TodoDetailDialog({
         <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Typography variant="caption" color="text.secondary">
-              #{todo.id} · {todo.repo} · {formatAbsolute(todo.created_at)}
+              #{todo.id} · {todo.repos.join(', ')} · {formatAbsolute(todo.created_at)}
             </Typography>
             <Typography
               component="h2"
@@ -151,6 +163,13 @@ export function TodoDetailDialog({
         <Stack spacing={2}>
           {editing ? (
             <Stack spacing={1}>
+              <RepoPicker
+                value={reposDraft}
+                options={repoOptions}
+                onChange={setReposDraft}
+                disabled={busy}
+                helperText="Egy todo több repóhoz is tartozhat"
+              />
               <TextField
                 label="Cím"
                 size="small"
@@ -174,7 +193,7 @@ export function TodoDetailDialog({
                 <Button
                   size="small"
                   variant="contained"
-                  disabled={busy || !titleDraft.trim()}
+                  disabled={busy || !titleDraft.trim() || reposDraft.length === 0}
                   onClick={saveEdit}
                 >
                   Mentés

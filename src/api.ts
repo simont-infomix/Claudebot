@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { ACTIVE_STATUSES, isStatus, type Status, type TodoStore } from './repo.js';
+import { ACTIVE_STATUSES, isStatus, normaliseRepos, type Status, type TodoStore } from './repo.js';
 
 function badRequest(res: Response, error: string): void {
   res.status(400).json({ error });
@@ -16,6 +16,17 @@ function parseId(req: Request, res: Response): number | undefined {
     return undefined;
   }
   return id;
+}
+
+/**
+ * The repo list from a request body, normalised. `null` means "not a list of strings" and
+ * an empty array means "nothing usable in it" — both are rejected by the callers, since a todo
+ * with no repo would be invisible under every filter.
+ */
+function parseRepos(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  if (value.some((entry) => typeof entry !== 'string')) return null;
+  return normaliseRepos(value as string[]);
 }
 
 /** Non-empty trimmed string, or undefined if absent; null if present but not a usable string. */
@@ -51,15 +62,18 @@ export function createApiRouter(store: TodoStore): Router {
   });
 
   router.post('/todos', (req, res) => {
-    const { repo, title, description } = req.body ?? {};
-    if (typeof repo !== 'string' || repo.trim() === '') return badRequest(res, 'repo is required');
+    const { repos, title, description } = req.body ?? {};
+    const nextRepos = parseRepos(repos);
+    if (!nextRepos || nextRepos.length === 0) {
+      return badRequest(res, 'repos must be a non-empty array of names');
+    }
     if (typeof title !== 'string' || title.trim() === '') return badRequest(res, 'title is required');
     if (description !== undefined && typeof description !== 'string') {
       return badRequest(res, 'description must be a string');
     }
 
     const todo = store.createTodo({
-      repo: repo.trim(),
+      repos: nextRepos,
       title: title.trim(),
       description: description ?? '',
     });
@@ -71,7 +85,15 @@ export function createApiRouter(store: TodoStore): Router {
     if (id === undefined) return;
     if (!store.getTodo(id)) return notFound(res);
 
-    const { title, description, status } = req.body ?? {};
+    const { repos, title, description, status } = req.body ?? {};
+
+    let nextRepos: string[] | undefined;
+    if (repos !== undefined) {
+      const parsed = parseRepos(repos);
+      if (!parsed) return badRequest(res, 'repos must be an array of names');
+      if (parsed.length === 0) return badRequest(res, 'repos cannot be empty');
+      nextRepos = parsed;
+    }
 
     const nextTitle = optionalText(title);
     if (nextTitle === null) return badRequest(res, 'title must be a string');
@@ -86,6 +108,7 @@ export function createApiRouter(store: TodoStore): Router {
 
     res.json(
       store.updateTodo(id, {
+        repos: nextRepos,
         title: nextTitle?.trim(),
         description: nextDescription,
         status: status as Status | undefined,

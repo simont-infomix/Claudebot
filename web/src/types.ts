@@ -5,7 +5,8 @@ export type Status = (typeof STATUSES)[number];
 
 export type Todo = {
   id: number;
-  repo: string;
+  /** Never empty. An agent files exactly one, but the UI can pin an item to several repos. */
+  repos: string[];
   title: string;
   description: string;
   status: Status;
