@@ -14,14 +14,18 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import * as api from './api';
 import { CommentThread } from './CommentThread';
 import { Markdown } from './Markdown';
 import { RepoPicker } from './RepoPicker';
 import { HAND_FONT, NOTE_PAPER, PAPER_TEXTURE, SHEET } from './board';
 import { formatAbsolute } from './format';
+import { copyTicketPrompt } from './prompt';
 import { STATUS_LABELS, STATUSES, type Status, type Todo, type TodoListItem } from './types';
 
 type Props = {
@@ -33,6 +37,7 @@ type Props = {
   onChange: (todo: Todo) => void;
   onDelete: (id: number) => void;
   onCommentCountChange: (id: number, delta: number) => void;
+  onNotice: (message: string) => void;
   onError: (message: string) => void;
 };
 
@@ -45,6 +50,7 @@ export function TodoDetailDialog({
   onChange,
   onDelete,
   onCommentCountChange,
+  onNotice,
   onError,
 }: Props) {
   const [editing, setEditing] = useState(false);
@@ -137,6 +143,7 @@ export function TodoDetailDialog({
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Typography variant="caption" color="text.secondary">
               #{todo.id} · {todo.repos.join(', ')} · {formatAbsolute(todo.created_at)}
+              {todo.pinned ? ' · kitűzve' : ''}
             </Typography>
             <Typography
               component="h2"
@@ -151,6 +158,33 @@ export function TodoDetailDialog({
               {todo.title}
             </Typography>
           </Box>
+          <Tooltip title="Prompt másolása az agentnek">
+            <IconButton
+              size="small"
+              aria-label="Prompt másolása az agentnek"
+              onClick={() => void copyTicketPrompt(todo, onNotice, onError)}
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={todo.pinned ? 'Kitűzés levétele' : 'Kitűzés a fal tetejére'}>
+            <IconButton
+              size="small"
+              aria-label={todo.pinned ? 'Kitűzés levétele' : 'Kitűzés'}
+              disabled={busy}
+              onClick={() =>
+                void run(async () =>
+                  onChange(await api.updateTodo(todo.id, { pinned: !todo.pinned })),
+                )
+              }
+            >
+              {todo.pinned ? (
+                <PushPinIcon fontSize="small" color="warning" />
+              ) : (
+                <PushPinOutlinedIcon fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Bezárás">
             <IconButton size="small" aria-label="Bezárás" onClick={onClose}>
               <CloseIcon fontSize="small" />

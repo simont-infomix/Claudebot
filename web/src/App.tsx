@@ -1,27 +1,42 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
 import Container from '@mui/material/Container';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogContentText from '@mui/material/DialogContentText';
+import DialogTitle from '@mui/material/DialogTitle';
 import FormControl from '@mui/material/FormControl';
 import GlobalStyles from '@mui/material/GlobalStyles';
+import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
 import InputLabel from '@mui/material/InputLabel';
 import LinearProgress from '@mui/material/LinearProgress';
 import ListItemText from '@mui/material/ListItemText';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Select from '@mui/material/Select';
+import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import CancelIcon from '@mui/icons-material/Cancel';
+import ClearIcon from '@mui/icons-material/Clear';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import InstallDesktopIcon from '@mui/icons-material/InstallDesktop';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import SearchIcon from '@mui/icons-material/Search';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import * as api from './api';
@@ -29,8 +44,8 @@ import { NewTodoForm } from './NewTodoForm';
 import { TodoNote } from './TodoNote';
 import { TodoRow } from './TodoRow';
 import { CORK_DARK, CORK_LIGHT, HAND_FONT, INK, NOTE_PAPER, PAPER_TEXTURE } from './board';
-import { useInstallPrompt, useOnline } from './pwa';
-import type { RepoSummary, StatusFilter, Todo, TodoListItem } from './types';
+import { notifyNewTodos, useInstallPrompt, useNotificationPrompt, useOnline } from './pwa';
+import type { RepoSummary, StatusFilter, Todo, TodoHead, TodoListItem } from './types';
 
 const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'active', label: 'Aktívak (nyitott + folyamatban)' },
@@ -56,45 +71,121 @@ function readView(): ViewMode {
 /** White-on-cork text needs a shadow to stay readable over the texture. */
 const ON_CORK = { color: '#fff9ec', textShadow: '0 1px 3px rgba(0,0,0,0.55)' };
 
+/** How often to ask "has anything arrived?". Cheap enough that the answer is a single row. */
+const POLL_MS = 30_000;
+
 export function App() {
   const [todos, setTodos] = useState<TodoListItem[]>([]);
   const [repos, setRepos] = useState<RepoSummary[]>([]);
   /** Empty = every repo; several entries show the selected repos' todos together. */
   const [repoFilter, setRepoFilter] = useState<string[]>([]);
+  const [repoMenuOpen, setRepoMenuOpen] = useState(false);
+  /** The repo whose rename dialog is open, if any. */
+  const [renaming, setRenaming] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
+  /** What is typed, and what has actually been sent — the second one lags by a keystroke pause. */
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
   const [view, setView] = useState<ViewMode>(readView);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   /** True when the service worker served the last load from its cache (server down / no network). */
   const [stale, setStale] = useState(false);
+  /** Set by the poll when the server's list no longer matches what is on screen. */
+  const [pending, setPending] = useState<TodoHead | null>(null);
+  /** What the list looked like at the last successful load — the thing the poll compares against. */
+  const baseline = useRef<TodoHead | null>(null);
+  /** The freshest arrival already announced, so one batch is not notified twice. */
+  const notifiedAt = useRef(0);
   const install = useInstallPrompt();
+  const askNotifications = useNotificationPrompt();
   const online = useOnline();
 
   const board = view === 'board';
+
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const load = useCallback(async () => {
     setLoading(true);
     api.cacheFlag.stale = false;
     try {
       const [loadedTodos, loadedRepos] = await Promise.all([
-        api.fetchTodos({ repos: repoFilter, status: statusFilter }),
+        api.fetchTodos({ repos: repoFilter, status: statusFilter, query }),
         api.fetchRepos(),
       ]);
       setTodos(loadedTodos);
       setRepos(loadedRepos);
       setError(null);
+      baseline.current = {
+        count: loadedTodos.length,
+        latest: loadedTodos.reduce((max, todo) => Math.max(max, todo.updated_at), 0),
+      };
+      setPending(null);
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
       setStale(api.cacheFlag.stale);
       setLoading(false);
     }
-  }, [repoFilter, statusFilter]);
+  }, [repoFilter, statusFilter, query]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** Re-read where the server stands without touching the screen — used after our own writes. */
+  const syncBaseline = useCallback(() => {
+    api
+      .fetchTodosHead({ repos: repoFilter, status: statusFilter, query })
+      .then((head) => {
+        baseline.current = head;
+        setPending(null);
+      })
+      .catch(() => {
+        // Nothing to do: the next poll or refresh will sort it out.
+      });
+  }, [repoFilter, statusFilter, query]);
+
+  // Your own edit bumps updated_at too, so without this every save would announce itself.
+  useEffect(() => {
+    api.onMutation(syncBaseline);
+    return () => api.onMutation(null);
+  }, [syncBaseline]);
+
+  // The list still never changes on its own — this only lights up a chip saying it could.
+  useEffect(() => {
+    if (!online) return;
+    const check = async () => {
+      const base = baseline.current;
+      if (!base) return;
+      try {
+        const head = await api.fetchTodosHead({ repos: repoFilter, status: statusFilter, query });
+        // `>` on purpose: a baseline that briefly runs ahead of the server (a write we just made)
+        // must not latch the chip on forever.
+        setPending(head.latest > base.latest || head.count !== base.count ? head : null);
+      } catch {
+        // Server down: the offline chip already says so, and a failed poll changes nothing.
+      }
+    };
+    const timer = setInterval(() => void check(), POLL_MS);
+    return () => clearInterval(timer);
+  }, [online, repoFilter, statusFilter, query]);
+
+  // Only actual arrivals are worth a popup; an edit made elsewhere is not.
+  useEffect(() => {
+    const base = baseline.current;
+    if (!pending || !base) return;
+    const added = pending.count - base.count;
+    if (added > 0 && pending.latest > notifiedAt.current) {
+      notifiedAt.current = pending.latest;
+      notifyNewTodos(added);
+    }
+  }, [pending]);
 
   const changeView = (next: ViewMode) => {
     setView(next);
@@ -137,6 +228,23 @@ export function App() {
     });
   };
 
+  /** Rename or merge a repo, then keep the filter pointing at whatever the todos moved to. */
+  const renameRepo = async (from: string, to: string) => {
+    try {
+      const { updated } = await api.renameRepo(from, to);
+      setRenaming(null);
+      setRepoFilter((current) => {
+        if (!current.includes(from)) return current;
+        const without = current.filter((repo) => repo !== from);
+        return without.includes(to) ? without : [...without, to];
+      });
+      setNotice(updated === 0 ? 'Nem változott semmi.' : `${updated} todo átkerült ide: ${to}`);
+      await load();
+    } catch (caught) {
+      setError((caught as Error).message);
+    }
+  };
+
   const activeCount = todos.filter((todo) => todo.status !== 'closed').length;
 
   const repoOptions = repos.map((entry) => entry.repo);
@@ -146,8 +254,11 @@ export function App() {
     onChange: handleChange,
     onDelete: handleDelete,
     onCommentCountChange: handleCommentCountChange,
+    onNotice: setNotice,
     onError: setError,
   };
+
+  const added = pending && baseline.current ? pending.count - baseline.current.count : 0;
 
   const filterControls = (
     <Stack
@@ -161,6 +272,9 @@ export function App() {
           multiple
           labelId="repo-filter-label"
           label="Repo"
+          open={repoMenuOpen}
+          onOpen={() => setRepoMenuOpen(true)}
+          onClose={() => setRepoMenuOpen(false)}
           value={repoFilter}
           onChange={(event) => {
             const value = event.target.value;
@@ -189,10 +303,48 @@ export function App() {
             <MenuItem key={entry.repo} value={entry.repo}>
               <Checkbox size="small" sx={{ mr: 1, p: 0 }} checked={repoFilter.includes(entry.repo)} />
               <ListItemText primary={`${entry.repo} (${entry.active_count})`} />
+              {/* mousedown too: the Select picks items up on mousedown, before any click lands */}
+              <Tooltip title="Átnevezés / összevonás">
+                <IconButton
+                  size="small"
+                  aria-label={`${entry.repo} átnevezése`}
+                  sx={{ ml: 1 }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setRepoMenuOpen(false);
+                    setRenaming(entry.repo);
+                  }}
+                >
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             </MenuItem>
           ))}
         </Select>
       </FormControl>
+
+      <TextField
+        size="small"
+        label="Keresés"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        sx={{ minWidth: 200 }}
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+            endAdornment: search ? (
+              <IconButton size="small" aria-label="Keresés törlése" onClick={() => setSearch('')}>
+                <ClearIcon fontSize="small" />
+              </IconButton>
+            ) : null,
+          },
+        }}
+      />
 
       <FormControl size="small" sx={{ minWidth: 260 }}>
         <InputLabel id="status-filter-label">Státusz</InputLabel>
@@ -273,6 +425,18 @@ export function App() {
             />
           )}
 
+          {/* the only thing that moves without you: a nudge that the list is worth reloading */}
+          {pending && (
+            <Chip
+              size="small"
+              color="info"
+              clickable
+              icon={<NotificationsActiveIcon />}
+              onClick={() => void load()}
+              label={added > 0 ? `${added} új tétel · Frissítés` : 'Változott · Frissítés'}
+            />
+          )}
+
           <ToggleButtonGroup
             exclusive
             size="small"
@@ -303,6 +467,19 @@ export function App() {
               Lista
             </ToggleButton>
           </ToggleButtonGroup>
+
+          {/* asked once: after that the browser remembers the answer and the button is gone */}
+          {askNotifications && (
+            <Tooltip title="Értesítés, ha új tétel érkezik, amíg máshol jársz">
+              <Button
+                startIcon={<NotificationsNoneIcon />}
+                onClick={askNotifications}
+                sx={board ? ON_CORK : undefined}
+              >
+                Értesítés
+              </Button>
+            </Tooltip>
+          )}
 
           {/* only shown while the browser considers the app installable — gone once it is installed */}
           {install && (
@@ -368,7 +545,7 @@ export function App() {
         )}
 
         {todos.length === 0 && !loading ? (
-          <EmptyState board={board} />
+          <EmptyState board={board} searching={query !== ''} />
         ) : board ? (
           <Box
             sx={{
@@ -391,12 +568,82 @@ export function App() {
           </Box>
         )}
       </Stack>
+
+      {renaming && (
+        <RepoRenameDialog
+          repo={renaming}
+          repos={repoOptions}
+          onCancel={() => setRenaming(null)}
+          onSubmit={(name) => void renameRepo(renaming, name)}
+        />
+      )}
+
+      {/* bottom-left, so it never lands on top of the update prompt */}
+      <Snackbar
+        open={notice !== null}
+        autoHideDuration={2500}
+        onClose={() => setNotice(null)}
+        message={notice ?? ''}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      />
     </Container>
   );
 }
 
-function EmptyState({ board }: { board: boolean }) {
-  const text = (
+/**
+ * Renaming is also the merge tool: typing a name that already exists folds the two together, which
+ * is the fix for an agent that spelled the folder differently once.
+ */
+function RepoRenameDialog({
+  repo,
+  repos,
+  onCancel,
+  onSubmit,
+}: {
+  repo: string;
+  repos: string[];
+  onCancel: () => void;
+  onSubmit: (name: string) => void;
+}) {
+  const [name, setName] = useState(repo);
+  const trimmed = name.trim();
+  const merging = trimmed !== repo && repos.includes(trimmed);
+
+  return (
+    <Dialog open fullWidth maxWidth="xs" onClose={onCancel}>
+      <DialogTitle>Repo átnevezése</DialogTitle>
+      <DialogContent>
+        <DialogContentText sx={{ mb: 2 }}>
+          A(z) „{repo}" nevű repo minden todójára érvényes. Az agent ezután is a saját nevén veszi
+          fel az újakat, azok külön repóként jelennek meg.
+        </DialogContentText>
+        <TextField
+          autoFocus
+          fullWidth
+          size="small"
+          label="Új név"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && trimmed) onSubmit(trimmed);
+          }}
+          helperText={merging ? `Összevonás a meglévő „${trimmed}" repóval.` : ' '}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel}>Mégse</Button>
+        <Button variant="contained" disabled={!trimmed} onClick={() => onSubmit(trimmed)}>
+          {merging ? 'Összevonás' : 'Átnevezés'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function EmptyState({ board, searching }: { board: boolean; searching: boolean }) {
+  const text = searching ? (
+    <>Nincs találat a keresésre.</>
+  ) : (
     <>
       Nincs megjeleníthető todo. Az agent az <code>add_todo</code> toollal tud ide írni.
     </>
@@ -428,7 +675,13 @@ function EmptyState({ board }: { board: boolean }) {
         ...theme.applyStyles('dark', { backgroundColor: NOTE_PAPER.open.dark }),
       })}
     >
-      Üres a fal. Az agent az <code>add_todo</code> toollal tud ide tűzni egy cetlit.
+      {searching ? (
+        'Egy cetli sem illik a keresésre.'
+      ) : (
+        <>
+          Üres a fal. Az agent az <code>add_todo</code> toollal tud ide tűzni egy cetlit.
+        </>
+      )}
     </Box>
   );
 }

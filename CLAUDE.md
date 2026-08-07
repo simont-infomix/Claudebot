@@ -9,7 +9,9 @@ works but need a **human decision**. The agent files items with `add_todo` and m
 triages them in the browser. There is deliberately **no push back to the agent** — `add_todo` returns
 only a confirmation and `list_todos` never exposes the human's comments or decisions, so nothing an
 agent does here can turn into waiting for an answer. `get_ticket(id)` is the one **pull**: when the
-human tells an agent "do #12", it can read that item in full, comments included.
+human tells an agent "do #12", it can read that item in full, comments included. `update_ticket` is
+the report back — an agent may comment and set `in_progress`, but **not close**: closing is the
+human's verdict. The invariant to preserve is that no agent ever has a reason to wait or poll.
 
 `specification.md` is the original (Hungarian) sketch; `README.md` is the user-facing doc, also in
 Hungarian. The UI strings are Hungarian; all code, comments and identifiers are English.
@@ -47,10 +49,16 @@ The key structural rule: **all SQL lives in `TodoStore` (`src/repo.ts`)**, and b
 also owns the `Status` union and `ACTIVE_STATUSES`.
 
 Data model (`src/db.ts`, schema applied idempotently on every open): `todos` (title, description,
-status ∈ `open|in_progress|closed`, timestamps as epoch ms), `todo_repos` and `comments`, the latter
-two with `ON DELETE CASCADE`. Writing or editing a comment also bumps the parent todo's `updated_at`,
-since lists are ordered `updated_at DESC` — activity floats an item to the top; so does re-pinning an
-item to other repos.
+status ∈ `open|in_progress|closed`, `pinned`, timestamps as epoch ms), `todo_repos` and `comments`,
+the latter two with `ON DELETE CASCADE`. Writing or editing a comment also bumps the parent todo's
+`updated_at`, since lists are ordered `pinned DESC, updated_at DESC` — activity floats an item to the
+top; so does re-pinning an item to other repos. **Kitűzés deliberately does not bump `updated_at`**
+(`TodoStore.updateTodo` tracks that as `activity`): it is a shelf position, and bumping would leave
+an unpinned item stuck at the top of a list that claims to be ordered by activity.
+
+`migrate()` in `db.ts` is the one place for schema evolution. Each step keys off what `PRAGMA
+table_info` actually reports rather than a version counter, so it is safe on every open — that is
+how both the `repo` column removal and the later `pinned` addition work.
 
 Repo membership is **many-to-many**, and that asymmetry is the point: an agent files under exactly
 one repo (`add_todo` takes a single `repo` string), while the human can pin an item to several in the
@@ -64,7 +72,14 @@ never a join that could duplicate rows.
 Storage is a **single global SQLite file** at `~/.todo-mcp/todos.db` (override with `TODO_MCP_DB`),
 shared across all projects; repo membership is the only separation. A repo name is expected to be the
 basename of the project folder, and consistency depends on the agent spelling it the same each time —
-hence the emphasis in the `add_todo` tool description.
+hence the emphasis in the `add_todo` tool description, and `TodoStore.renameRepo` as the escape hatch
+when it goes wrong anyway. Rename doubles as merge (`UPDATE OR IGNORE` + `DELETE` of the leftovers)
+and does **not** bump `updated_at`: housekeeping is not activity, and it would reshuffle everything.
+
+`listTodos`/`headTodos` share `buildFilter`, so the "has anything arrived?" poll can never disagree
+with what the list itself would return. Search is a `LIKE` over title + description with `%`/`_`
+escaped (`likeTerm`); SQLite only case-folds ASCII, so accented capitals do not match their lowercase
+form — acceptable for a personal list, and the alternative is an ICU build.
 
 `src/config.ts` centralises host/port/paths. Port is `TODO_MCP_PORT` (default 4321), and
 `ALLOWED_HOSTS` is derived from it — `/mcp` rejects any other `Host` header (DNS-rebinding guard,
@@ -102,9 +117,32 @@ and `TodoDetailDialog` (the last two get the suggestions through `repoOptions`, 
 answer 400, and `setRepos` ignores an empty set — a repo-less todo would be invisible under every
 filter. The board note has no room for a list, so it shows `first +N` with the rest in a tooltip.
 
-The UI **never polls or auto-refreshes**: todos arriving over MCP appear only after the user hits
-*Frissítés*. When an inline edit makes an item stop matching the current filter, it is kept in place
-until the next refresh rather than disappearing mid-interaction.
+Renaming a repo is an `EditOutlinedIcon` on each filter menu row (`RepoRenameDialog`). Both `onClick`
+and `onMouseDown` must stop propagation there — a `Select` picks items up on mousedown, so without it
+the rename button would also toggle the checkbox. Typing an existing name merges, and the dialog says
+so before you commit.
+
+The search box is debounced 300 ms into a separate `query` state, which is what `load` and the poll
+depend on — the raw `search` value never reaches the server, so typing does not spam it.
+
+**Kitűzés** (`pinned`) and **prompt copying** are on all three surfaces: the note's hover toolbar, the
+row summary, and the dialog header. `prompt.ts` builds the paste-ready Hungarian instruction — it is
+the bridge between the wall and the agent, so the only thing that has to travel by hand is the number.
+The board note also carries quick status buttons; everything in that toolbar stops propagation, and
+the note's own Enter/Space handler ignores events whose target is not the note itself.
+
+`board.ts` grows `ageStain`/`ageOverlay`: a note yellows from two weeks to two months since its last
+activity, painted as a `mixBlendMode: multiply` `::before` wash with the dog-ear curling further.
+Closed items never stain — the point is to make *neglect* visible, not age.
+
+The UI **still never auto-refreshes**: todos arriving over MCP appear only after the user hits
+*Frissítés*. What was added is a 30 s poll of `GET /api/todos/head` that only lights up a chip — the
+list itself never changes under the user's hands. `baseline` (a ref, set on every load) is what the
+poll compares against, and `api.onMutation` re-syncs it after every write, so your own edit never
+comes back at you as news. The latest comparison is `>` rather than `!==` precisely so a baseline that
+briefly runs ahead of the server cannot latch the chip on. When an inline edit makes an item stop
+matching the current filter, it is kept in place until the next refresh rather than disappearing
+mid-interaction.
 
 ### Installable app (PWA)
 
@@ -120,6 +158,13 @@ browser error page.
   hashed asset names are only known at bundle time) and a version hashed from everything precached,
   then emits `dist/web/sw.js`. Both placeholders are substituted with `replaceAll`, and the plugin
   errors if nothing was replaced — so do not mention them verbatim in prose inside `sw.js`.
+- `/api/todos/head` is **passed straight through** the worker: a cached answer to "is there anything
+  new?" is worse than none, and serving one would flag the whole screen as stale. `fetchTodosHead`
+  additionally opts out of `cacheFlag` tracking, so a background poll can never claim the screen is
+  showing cached data.
+- Notifications are opt-in through the header's *Értesítés* button (browsers only honour the request
+  from a user gesture) and only fire while the window is hidden — that is the case the feature exists
+  for; when you are looking at the wall, the chip is enough.
 - Strategies: cache-first for fingerprinted assets, network-first for navigations (falling back to
   the precached shell) and for `/api/*` GETs (falling back to the last successful response).
   `/mcp` and every non-GET is passed straight through — agent traffic and writes are never cached.
@@ -150,7 +195,8 @@ both schemes.
 - MCP tool descriptions are long, deliberate prose (`ADD_TODO_DESCRIPTION` in `src/mcp.ts`): they are
   what stops an agent from treating this as its own scratch todo list or expecting an answer back.
   `GET_TICKET_DESCRIPTION` carries the same weight — it has to say "pull, on the user's cue" clearly
-  enough that no agent starts polling it for a reply. Treat them as product surface, not comments.
+  enough that no agent starts polling it for a reply, and `UPDATE_TICKET_DESCRIPTION` has to explain
+  *why* closing is missing rather than just omitting it. Treat them as product surface, not comments.
 - The MCP registration is user-scoped and shared by every project:
   `claude mcp add --transport http todo-mcp http://127.0.0.1:4321/mcp --scope user`. The server does
   not start automatically; if it is down, MCP calls simply fail.

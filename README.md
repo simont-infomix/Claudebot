@@ -7,6 +7,8 @@ közben merülnek fel, de **emberi döntést igényelnek**. Az agent az `add_tod
 Ez nem az agent teendőlistája: **magától semmi nem megy vissza** az agenthez. Ha egy döntést meg kell
 valósítani, azt te adod be neki a szokásos módon — ilyenkor elég a sorszámra hivatkozni, a
 `get_ticket(id)` toollal az agent kiolvassa a tétel teljes tartalmát a bejegyzéseiddel együtt.
+A cetlin lévő *Prompt másolása* gombbal a kész mondat egyből a vágólapra kerül. Az agent az
+`update_ticket`-tel vissza tud jegyezni, mit csinált — **lezárni viszont nem tud**, az a te dolgod.
 
 ## Felépítés
 
@@ -60,27 +62,52 @@ projektet érint, te teheted hozzá a többit a webes felületen. `title` egy so
 kell), `description` opcionális kontextus, markdownként renderelve.
 
 **`list_todos(repo?, status?)`** — a már felvett tételek (default: `open` + `in_progress`).
-Célja, hogy az agent lássa, mi van bent, és ne írja be kétszer ugyanazt. Bejegyzéseket nem ad vissza.
+Célja, hogy az agent lássa, mi van bent, és ne írja be kétszer ugyanazt. Bejegyzéseket nem ad vissza,
+csak a darabszámukat — abból látszik, melyik tételre érdemes `get_ticket`-et hívni.
 A több repóhoz rendelt tétel mindegyik repo szűrésében megjelenik.
 
+**`search_todos(query, repo?, status?)`** — keresés cím és leírás szövegében. Ugyanaz a kimenet,
+mint a `list_todos`-é. Egy képernyőnyi tétel fölött ez a duplikátum-ellenőrzés gyors módja.
+
 **`get_ticket(id)`** — egy tétel teljes tartalma: cím, leírás, státusz, repók, időbélyegek és
-**minden bejegyzésed**. Repofüggetlen, elég a sorszám. Akkor használja az agent, amikor ráirányítod
+**minden bejegyzés**. Repofüggetlen, elég a sorszám. Akkor használja az agent, amikor ráirányítod
 („csináld meg a 12-est", „mit írtam a 7-esre?"); magától nem érkezik ide semmi, ezért nincs értelme
 figyelnie.
+
+**`update_ticket(id, comment?, status?)`** — az agent visszajelzése: bejegyzést ír a tételhez, és/vagy
+`folyamatban`-ra állítja. **Lezárni nem tud** — az azt jelentené, hogy „ezt jóváhagytam", ami a te
+döntésed, és egy kattintás a felületen.
 
 ## Web UI
 
 `http://127.0.0.1:4321`
 
-- flat lista, repo és státusz szűrővel; default az aktívak (nyitott + folyamatban), legfrissebb elöl
+Két egyenrangú nézet, a fejlécben a *Fal / Lista* kapcsolóval: parafa fal post-it cetlikkel, vagy
+a sima lista. Mindkettőben ugyanaz az adat és ugyanazok a műveletek.
+
+- repo és státusz szűrő, **kereső** (cím és leírás szövegében); default az aktívak
+  (nyitott + folyamatban), legfrissebb elöl
 - a repo szűrőben több repo is kipipálható: a kiválasztottak egymás mellett, chipként látszanak,
   és külön-külön kivehetők (üres kiválasztás = mind)
-- egy sort lenyitva: leírás (markdown), státuszváltás `nyitott → folyamatban → lezárt`,
+- a szűrőmenüben minden repo mellett van egy ceruza: **átnevezés**, és ha a beírt név már létezik,
+  **összevonás** — ez a javítás, ha az agent egyszer másképp írta le a mappanevet
+- egy tételt megnyitva: leírás (markdown), státuszváltás `nyitott → folyamatban → lezárt`,
   bejegyzés-szál, repo/cím/leírás szerkesztés, törlés
 - a **repo szerkeszthető**, és egy todóhoz több repo is megadható (a mező felajánlja a már létező
   neveket, de újat is beírhatsz); legalább egynek maradnia kell, különben egyik szűrőben sem látszana
+- **kitűzés**: a kitűzött tételek a lista tetején maradnak (a kitűzés nem számít aktivitásnak,
+  tehát nem tolja előre a tételt a levétele után sem)
+- **prompt másolása**: vágólapra teszi a kész mondatot, amit az agentnek beadhatsz
+- a falon a cetli sarkában hover-re előbújnak a gyorsgombok: folyamatban / lezárás / újranyitás,
+  kitűzés, prompt — dialógus nyitása nélkül
+- a **régóta érintetlen cetlik megsárgulnak** (két héttől két hónapig fokozatosan), a sarkuk jobban
+  felkunkorodik; a lezártak nem öregszenek
 - kézzel is felvehetsz todót
-- **nincs automatikus frissítés**: a közben MCP-n bejött todókhoz nyomd meg a *Frissítés* gombot
+- **nincs automatikus frissítés**: a lista sosem változik a kezed alatt. Fél percenként viszont
+  megkérdezi a szervertől, jött-e valami, és ha igen, a fejlécben megjelenik egy *N új tétel ·
+  Frissítés* chip — a saját szerkesztéseid nem jelennek meg újdonságként
+- az *Értesítés* gombbal (egyszer kell megnyomni) asztali értesítést is kérhetsz az új tételekről;
+  csak akkor jön, ha épp nem az appot nézed
 
 ## Telepítés alkalmazásként
 

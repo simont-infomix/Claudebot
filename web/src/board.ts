@@ -71,3 +71,38 @@ export function noteTilt(id: number): number {
 export function pinColor(id: number): string {
   return PINS[Math.abs(id) % PINS.length] ?? '#d24b42';
 }
+
+/** Kitűzött notes wear the same brass pin, so they read as a set rather than as more colours. */
+export const PINNED_PIN = '#b8860b';
+
+const AGE_GRACE_DAYS = 14;
+const AGE_FULL_DAYS = 60;
+const AGE_MAX = 0.4;
+
+/**
+ * How yellowed a note is, 0…AGE_MAX. Nothing for the first two weeks — that is just a note being
+ * a note — then deepening towards two months. Measured from the last activity, so a note you
+ * commented on yesterday is fresh again; the point is to make *neglect* visible, not age itself.
+ */
+export function ageStain(updatedAt: number, now: number = Date.now()): number {
+  const days = (now - updatedAt) / 86_400_000;
+  if (days <= AGE_GRACE_DAYS) return 0;
+  const progress = Math.min(1, (days - AGE_GRACE_DAYS) / (AGE_FULL_DAYS - AGE_GRACE_DAYS));
+  return progress * AGE_MAX;
+}
+
+/** Uneven tea-stain wash, multiplied over the paper so the ink underneath stays readable. */
+export function ageOverlay(stain: number): Record<string, unknown> {
+  if (stain <= 0) return {};
+  return {
+    content: '""',
+    position: 'absolute',
+    inset: 0,
+    pointerEvents: 'none',
+    mixBlendMode: 'multiply',
+    background:
+      `radial-gradient(ellipse at 72% 22%, rgba(168,120,40,${(stain * 0.85).toFixed(3)}), ` +
+      `rgba(136,96,32,${(stain * 0.45).toFixed(3)}) 55%, ` +
+      `rgba(122,86,28,${(stain * 0.8).toFixed(3)}))`,
+  };
+}

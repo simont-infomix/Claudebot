@@ -1,5 +1,12 @@
 import { Router, type Request, type Response } from 'express';
-import { ACTIVE_STATUSES, isStatus, normaliseRepos, type Status, type TodoStore } from './repo.js';
+import {
+  ACTIVE_STATUSES,
+  isStatus,
+  normaliseRepos,
+  type Status,
+  type TodoFilter,
+  type TodoStore,
+} from './repo.js';
 
 function badRequest(res: Response, error: string): void {
   res.status(400).json({ error });
@@ -36,29 +43,45 @@ function optionalText(value: unknown): string | undefined | null {
   return value;
 }
 
+/** The `repo` / `status` / `q` query params shared by the list and its head. */
+function parseTodoFilter(req: Request, res: Response): TodoFilter | undefined {
+  // `repo` may repeat — the UI can filter on several repos at once.
+  const repos = (Array.isArray(req.query.repo) ? req.query.repo : [req.query.repo])
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter((value) => value !== '');
+  const statusParam = typeof req.query.status === 'string' ? req.query.status : '';
+
+  let statuses: Status[] | undefined;
+  if (statusParam === '' || statusParam === 'active') {
+    statuses = ACTIVE_STATUSES;
+  } else if (statusParam === 'all') {
+    statuses = undefined;
+  } else if (isStatus(statusParam)) {
+    statuses = [statusParam];
+  } else {
+    badRequest(res, `Unknown status: ${statusParam}`);
+    return undefined;
+  }
+
+  const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+
+  return { repos, statuses, query: query || undefined };
+}
+
 export function createApiRouter(store: TodoStore): Router {
   const router = Router();
 
   router.get('/todos', (req, res) => {
-    // `repo` may repeat — the UI can filter on several repos at once.
-    const repos = (Array.isArray(req.query.repo) ? req.query.repo : [req.query.repo])
-      .filter((value): value is string => typeof value === 'string')
-      .map((value) => value.trim())
-      .filter((value) => value !== '');
-    const statusParam = typeof req.query.status === 'string' ? req.query.status : '';
+    const filter = parseTodoFilter(req, res);
+    if (filter) res.json(store.listTodos(filter));
+  });
 
-    let statuses: Status[] | undefined;
-    if (statusParam === '' || statusParam === 'active') {
-      statuses = ACTIVE_STATUSES;
-    } else if (statusParam === 'all') {
-      statuses = undefined;
-    } else if (isStatus(statusParam)) {
-      statuses = [statusParam];
-    } else {
-      return badRequest(res, `Unknown status: ${statusParam}`);
-    }
-
-    res.json(store.listTodos({ repos, statuses }));
+  // Polled by the UI to notice todos that arrived over MCP; deliberately tiny, and never cached by
+  // the service worker, so a poll can never make the list look stale.
+  router.get('/todos/head', (req, res) => {
+    const filter = parseTodoFilter(req, res);
+    if (filter) res.json(store.headTodos(filter));
   });
 
   router.post('/todos', (req, res) => {
@@ -85,7 +108,7 @@ export function createApiRouter(store: TodoStore): Router {
     if (id === undefined) return;
     if (!store.getTodo(id)) return notFound(res);
 
-    const { repos, title, description, status } = req.body ?? {};
+    const { repos, title, description, status, pinned } = req.body ?? {};
 
     let nextRepos: string[] | undefined;
     if (repos !== undefined) {
@@ -105,6 +128,9 @@ export function createApiRouter(store: TodoStore): Router {
     if (nextDescription === null) return badRequest(res, 'description must be a string');
 
     if (status !== undefined && !isStatus(status)) return badRequest(res, `Unknown status: ${status}`);
+    if (pinned !== undefined && typeof pinned !== 'boolean') {
+      return badRequest(res, 'pinned must be a boolean');
+    }
 
     res.json(
       store.updateTodo(id, {
@@ -112,6 +138,7 @@ export function createApiRouter(store: TodoStore): Router {
         title: nextTitle?.trim(),
         description: nextDescription,
         status: status as Status | undefined,
+        pinned: pinned as boolean | undefined,
       }),
     );
   });
@@ -163,6 +190,19 @@ export function createApiRouter(store: TodoStore): Router {
 
   router.get('/repos', (_req, res) => {
     res.json(store.listRepos());
+  });
+
+  /** Rename everywhere, or merge into an existing repo if the new name is already taken. */
+  router.patch('/repos/:repo', (req, res) => {
+    const from = req.params.repo;
+    const { name } = req.body ?? {};
+    if (typeof name !== 'string' || name.trim() === '') return badRequest(res, 'name is required');
+
+    if (name.trim() === from) return res.json({ updated: 0 });
+
+    const updated = store.renameRepo(from, name.trim());
+    if (updated === 0) return notFound(res);
+    res.json({ updated });
   });
 
   return router;

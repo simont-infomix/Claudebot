@@ -51,6 +51,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // The background "anything new?" poll: a cached answer would be worse than no answer, and
+  // serving one would flag the whole screen as stale. Straight to the network or nothing.
+  if (url.pathname === '/api/todos/head') return;
+
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(networkFirst(request, DATA_CACHE));
     return;

@@ -119,6 +119,40 @@ export function useAppUpdate(): (() => void) | null {
     : null;
 }
 
+/**
+ * Returns a callback that asks for notification permission, or `null` once the question is settled
+ * (granted or denied) — so the header button disappears after the one time it is needed. Browsers
+ * only honour the request from a user gesture, which is why this is a button and not a side effect.
+ */
+export function useNotificationPrompt(): (() => void) | null {
+  const supported = 'Notification' in window;
+  const [permission, setPermission] = useState<NotificationPermission>(
+    supported ? Notification.permission : 'denied',
+  );
+
+  const ask = useCallback(() => {
+    void Notification.requestPermission().then(setPermission);
+  }, []);
+
+  return supported && permission === 'default' ? ask : null;
+}
+
+/**
+ * A desktop notification for todos that landed while you were elsewhere — which is the normal case,
+ * since the agent files them exactly when you are not watching. Skipped when the window is visible:
+ * the chip in the header already says it, and a popup over the wall would be noise.
+ */
+export function notifyNewTodos(count: number): void {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (document.visibilityState === 'visible') return;
+
+  new Notification('Todo MCP', {
+    body: count === 1 ? 'Új tétel érkezett a falra.' : `${count} új tétel érkezett a falra.`,
+    // One rolling notification instead of a pile: the count is what matters, not each arrival.
+    tag: 'todo-mcp-new',
+  });
+}
+
 export function useOnline(): boolean {
   const [online, setOnline] = useState(() => navigator.onLine);
 

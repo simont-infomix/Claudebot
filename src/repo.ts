@@ -17,11 +17,18 @@ export type Todo = {
   title: string;
   description: string;
   status: Status;
+  /** Human-only marker that floats an item above the `updated_at` ordering. */
+  pinned: boolean;
   created_at: number;
   updated_at: number;
 };
 
 export type TodoListItem = Todo & { comment_count: number };
+
+export type TodoFilter = { repos?: string[]; statuses?: Status[]; query?: string };
+
+/** Enough to tell "has anything arrived since I loaded?" without shipping the list again. */
+export type TodoHead = { count: number; latest: number };
 
 export type Comment = {
   id: number;
@@ -61,9 +68,15 @@ function toTodo(row: Row): Todo {
     title: row.title as string,
     description: row.description as string,
     status: row.status as Status,
+    pinned: num(row.pinned) === 1,
     created_at: num(row.created_at),
     updated_at: num(row.updated_at),
   };
+}
+
+/** `%` and `_` are wildcards in LIKE, so a search for "50%" must not match everything. */
+function likeTerm(query: string): string {
+  return `%${query.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 }
 
 function toComment(row: Row): Comment {
@@ -80,8 +93,12 @@ function toComment(row: Row): Comment {
 export class TodoStore {
   constructor(private readonly db: DatabaseSync) {}
 
-  /** `repos` is an OR over repo names — a todo matches if any of its repos is listed. Empty = all. */
-  listTodos(filter: { repos?: string[]; statuses?: Status[] } = {}): TodoListItem[] {
+  /**
+   * The WHERE shared by the list and its head, so a "what changed?" poll can never disagree with
+   * what the list would return. `repos` is an OR over repo names — a todo matches if any of its
+   * repos is listed; empty means every repo.
+   */
+  private buildFilter(filter: TodoFilter): { sql: string; params: (string | number)[] } {
     const where: string[] = [];
     const params: (string | number)[] = [];
 
@@ -96,18 +113,40 @@ export class TodoStore {
       where.push(`t.status IN (${filter.statuses.map(() => '?').join(', ')})`);
       params.push(...filter.statuses);
     }
+    if (filter.query) {
+      // Substring match on both text fields. SQLite's LIKE only folds case for ASCII, so an
+      // accented capital will not match its lowercase form — good enough for a personal list.
+      where.push(`(t.title LIKE ? ESCAPE '\\' OR t.description LIKE ? ESCAPE '\\')`);
+      params.push(likeTerm(filter.query), likeTerm(filter.query));
+    }
 
+    return { sql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  }
+
+  listTodos(filter: TodoFilter = {}): TodoListItem[] {
+    const { sql, params } = this.buildFilter(filter);
     const rows = this.db
       .prepare(
         `SELECT t.*, ${REPOS_JSON} AS repos,
                 (SELECT COUNT(*) FROM comments c WHERE c.todo_id = t.id) AS comment_count
          FROM todos t
-         ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-         ORDER BY t.updated_at DESC, t.id DESC`,
+         ${sql}
+         ORDER BY t.pinned DESC, t.updated_at DESC, t.id DESC`,
       )
       .all(...params) as Row[];
 
     return rows.map((row) => ({ ...toTodo(row), comment_count: num(row.comment_count) }));
+  }
+
+  /** Size and freshness of what `listTodos` would return, for the "new items arrived" check. */
+  headTodos(filter: TodoFilter = {}): TodoHead {
+    const { sql, params } = this.buildFilter(filter);
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) AS count, COALESCE(MAX(t.updated_at), 0) AS latest FROM todos t ${sql}`,
+      )
+      .get(...params) as Row;
+    return { count: num(row.count), latest: num(row.latest) };
   }
 
   getTodo(id: number): Todo | undefined {
@@ -138,7 +177,13 @@ export class TodoStore {
 
   updateTodo(
     id: number,
-    patch: { repos?: string[]; title?: string; description?: string; status?: Status },
+    patch: {
+      repos?: string[];
+      title?: string;
+      description?: string;
+      status?: Status;
+      pinned?: boolean;
+    },
   ): Todo | undefined {
     if (!this.getTodo(id)) return undefined;
 
@@ -157,15 +202,29 @@ export class TodoStore {
       sets.push('status = ?');
       params.push(patch.status);
     }
-
-    // Re-pinning an item to other repos is activity too, so it bumps updated_at like the rest.
+    if (patch.pinned !== undefined) {
+      sets.push('pinned = ?');
+      params.push(patch.pinned ? 1 : 0);
+    }
     if (patch.repos !== undefined) this.setRepos(id, patch.repos);
-    else if (sets.length === 0) return this.getTodo(id);
 
-    sets.push('updated_at = ?');
-    params.push(Date.now(), id);
+    // Re-pinning an item to other repos is activity, so it bumps updated_at like an edit does.
+    // Kitűzés is not: it is a shelf position, and bumping would make unpinning leave the item
+    // stuck at the top of a list that claims to be ordered by activity.
+    const activity =
+      patch.repos !== undefined ||
+      patch.title !== undefined ||
+      patch.description !== undefined ||
+      patch.status !== undefined;
+    if (activity) {
+      sets.push('updated_at = ?');
+      params.push(Date.now());
+    }
 
-    this.db.prepare(`UPDATE todos SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+    if (sets.length > 0) {
+      params.push(id);
+      this.db.prepare(`UPDATE todos SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+    }
     return this.getTodo(id);
   }
 
@@ -238,5 +297,28 @@ export class TodoStore {
       )
       .all() as Row[];
     return rows.map((row) => ({ repo: row.repo as string, active_count: num(row.active_count) }));
+  }
+
+  /**
+   * Rename a repo everywhere, which doubles as a merge when the target already exists — the fix
+   * for an agent that spelled the folder name a different way once. Returns how many todos were
+   * touched. Deliberately does not bump `updated_at`: housekeeping is not activity, and it would
+   * reshuffle the whole list.
+   */
+  renameRepo(from: string, to: string): number {
+    const target = to.trim();
+    if (target === '' || target === from) return 0;
+
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS count FROM todo_repos WHERE repo = ?')
+      .get(from) as Row;
+    const affected = num(row.count);
+    if (affected === 0) return 0;
+
+    // OR IGNORE: a todo already filed under both names collides on the primary key — it is simply
+    // already merged, and the leftover row under the old name goes in the DELETE below.
+    this.db.prepare('UPDATE OR IGNORE todo_repos SET repo = ? WHERE repo = ?').run(target, from);
+    this.db.prepare('DELETE FROM todo_repos WHERE repo = ?').run(from);
+    return affected;
   }
 }

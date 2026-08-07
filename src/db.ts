@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS todos (
   description TEXT NOT NULL DEFAULT '',
   status      TEXT NOT NULL DEFAULT 'open'
               CHECK (status IN ('open','in_progress','closed')),
+  pinned      INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL
 );
@@ -36,18 +37,27 @@ CREATE INDEX IF NOT EXISTS idx_comments_todo ON comments(todo_id, id);
 `;
 
 /**
- * Move a pre-multi-repo database over: the old single `todos.repo` column becomes the first (and
- * only) `todo_repos` row. Detected by the column still being there, so it runs exactly once.
+ * Bring an older database up to the current shape. Each step keys off what is actually in the
+ * table, so it is safe to run on every open and there is no version counter to keep in sync.
  */
-function migrateRepoColumn(db: DatabaseSync): void {
-  const columns = db.prepare('PRAGMA table_info(todos)').all() as { name: string }[];
-  if (!columns.some((column) => column.name === 'repo')) return;
+function migrate(db: DatabaseSync): void {
+  const columns = new Set(
+    (db.prepare('PRAGMA table_info(todos)').all() as { name: string }[]).map((c) => c.name),
+  );
 
-  db.exec(`
-    INSERT OR IGNORE INTO todo_repos (todo_id, repo) SELECT id, repo FROM todos;
-    DROP INDEX IF EXISTS idx_todos_repo_status;
-    ALTER TABLE todos DROP COLUMN repo;
-  `);
+  // Pre-multi-repo: the old single `todos.repo` becomes the first (and only) `todo_repos` row.
+  if (columns.has('repo')) {
+    db.exec(`
+      INSERT OR IGNORE INTO todo_repos (todo_id, repo) SELECT id, repo FROM todos;
+      DROP INDEX IF EXISTS idx_todos_repo_status;
+      ALTER TABLE todos DROP COLUMN repo;
+    `);
+  }
+
+  // Pinning came later; everything already recorded starts unpinned.
+  if (!columns.has('pinned')) {
+    db.exec('ALTER TABLE todos ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0');
+  }
 }
 
 export function openDb(path = DB_PATH): DatabaseSync {
@@ -58,6 +68,6 @@ export function openDb(path = DB_PATH): DatabaseSync {
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(SCHEMA);
-  migrateRepoColumn(db);
+  migrate(db);
   return db;
 }

@@ -10,11 +10,16 @@ export type Todo = {
   title: string;
   description: string;
   status: Status;
+  /** Kitűzve: floats above the `updated_at` ordering. Not something an agent can set. */
+  pinned: boolean;
   created_at: number;
   updated_at: number;
 };
 
 export type TodoListItem = Todo & { comment_count: number };
+
+/** Size + freshness of the current filter's list, polled to spot todos that arrived over MCP. */
+export type TodoHead = { count: number; latest: number };
 
 export type Comment = {
   id: number;

@@ -5,6 +5,7 @@ import AccordionSummary from '@mui/material/AccordionSummary';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import IconButton from '@mui/material/IconButton';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -17,14 +18,18 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutlined';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import * as api from './api';
 import { CommentThread } from './CommentThread';
 import { Markdown } from './Markdown';
 import { RepoPicker } from './RepoPicker';
 import { formatAbsolute, formatRelative } from './format';
+import { copyTicketPrompt } from './prompt';
 import { STATUS_COLORS, STATUS_LABELS, STATUSES, type Status, type Todo, type TodoListItem } from './types';
 
 type Props = {
@@ -34,6 +39,7 @@ type Props = {
   onChange: (todo: Todo) => void;
   onDelete: (id: number) => void;
   onCommentCountChange: (id: number, delta: number) => void;
+  onNotice: (message: string) => void;
   onError: (message: string) => void;
 };
 
@@ -43,6 +49,7 @@ export function TodoRow({
   onChange,
   onDelete,
   onCommentCountChange,
+  onNotice,
   onError,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -144,6 +151,38 @@ export function TodoRow({
               <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
                 {formatRelative(todo.updated_at)}
               </Typography>
+            </Tooltip>
+            {/* the summary is a div[role=button], so these nested buttons only need to not bubble */}
+            <Tooltip title="Prompt másolása az agentnek">
+              <IconButton
+                size="small"
+                aria-label="Prompt másolása az agentnek"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void copyTicketPrompt(todo, onNotice, onError);
+                }}
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={todo.pinned ? 'Kitűzés levétele' : 'Kitűzés a lista tetejére'}>
+              <IconButton
+                size="small"
+                aria-label={todo.pinned ? 'Kitűzés levétele' : 'Kitűzés'}
+                disabled={busy}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void run(async () =>
+                    onChange(await api.updateTodo(todo.id, { pinned: !todo.pinned })),
+                  );
+                }}
+              >
+                {todo.pinned ? (
+                  <PushPinIcon fontSize="small" color="warning" />
+                ) : (
+                  <PushPinOutlinedIcon fontSize="small" />
+                )}
+              </IconButton>
             </Tooltip>
           </Stack>
         </Stack>
