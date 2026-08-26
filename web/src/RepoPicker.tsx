@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 
@@ -25,6 +26,15 @@ function normalise(repos: string[]): string[] {
  * pinned to a project that has no items yet, and the agent's spelling is the one to match.
  */
 export function RepoPicker({ value, options, onChange, helperText, disabled }: Props) {
+  const [inputValue, setInputValueState] = useState('');
+  // Mirrors inputValue but updates synchronously, so onBlur never reads a stale value from a
+  // React state update that hasn't flushed yet (e.g. right after picking an option by click).
+  const inputRef = useRef('');
+  const setInputValue = (next: string) => {
+    inputRef.current = next;
+    setInputValueState(next);
+  };
+
   return (
     <Autocomplete
       multiple
@@ -33,8 +43,15 @@ export function RepoPicker({ value, options, onChange, helperText, disabled }: P
       size="small"
       options={options}
       value={value}
+      inputValue={inputValue}
       disabled={disabled}
       onChange={(_event, next) => onChange(normalise(next as string[]))}
+      onInputChange={(_event, next) => setInputValue(next)}
+      onBlur={() => {
+        const trimmed = inputRef.current.trim();
+        if (trimmed !== '') onChange(normalise([...value, trimmed]));
+        setInputValue('');
+      }}
       sx={{ minWidth: 220 }}
       renderInput={(params) => (
         <TextField {...params} label="Repo(k)" size="small" helperText={helperText} />
