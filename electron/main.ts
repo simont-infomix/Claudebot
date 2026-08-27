@@ -21,7 +21,12 @@ const PORT = Number(process.env.TODO_MCP_PORT ?? 4321);
 
 const APP_URL = `http://${HOST}:${PORT}`;
 const HEALTH_URL = `${APP_URL}/api/health`;
-const ICON_PATH = join(import.meta.dirname, '..', '..', 'web', 'public', 'icon-192.png');
+/**
+ * `dist/web/icon-192.png`, not the `web/public/` source: electron-builder's `files` list only
+ * packages `dist/**` (see electron-builder.yml), so the source copy doesn't exist in a built app —
+ * only vite's copy of it, sitting next to this file's own `dist/electron` at build time.
+ */
+const ICON_PATH = join(import.meta.dirname, '..', 'web', 'icon-192.png');
 
 /**
  * dist/server.js is a sibling build (tsconfig.server.json), loaded at runtime relative to this
