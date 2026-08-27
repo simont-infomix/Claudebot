@@ -1,0 +1,16 @@
+appId: hu.hphdigital.todomcp
+productName: Todo MCP
+directories:
+  output: release
+files:
+  - dist/**/*
+  - '!dist/**/*.map'
+  - package.json
+win:
+  target: nsis
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
