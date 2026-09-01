@@ -32,6 +32,15 @@ window.addEventListener('beforeinstallprompt', (event) => {
 
 window.addEventListener('appinstalled', () => setDeferredPrompt(null));
 
+/**
+ * True inside the Electron shell's BrowserWindow. Electron already decides whether the server is
+ * up before it ever shows the window, so the service worker's own cache/update machinery would
+ * just be a second, redundant "which version am I looking at" system stacked on top of Electron's.
+ */
+function isElectron(): boolean {
+  return navigator.userAgent.includes('Electron/');
+}
+
 /** `null` while the browser does not consider the app installable (or it already is). */
 export function useInstallPrompt(): (() => Promise<void>) | null {
   const [prompt, setPrompt] = useState(deferredPrompt);
@@ -64,7 +73,7 @@ export function useAppUpdate(): (() => void) | null {
   const applying = useRef(false);
 
   useEffect(() => {
-    if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+    if (!import.meta.env.PROD || !('serviceWorker' in navigator) || isElectron()) return;
 
     // Only the update the user accepted should reload the page; the first registration taking
     // control of an uncontrolled page must not.

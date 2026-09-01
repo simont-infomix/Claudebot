@@ -7,10 +7,11 @@
  */
 
 import { deflateSync } from 'node:zlib';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const OUT_DIR = join(import.meta.dirname, '..', 'web', 'public');
+const ICO_DIR = join(import.meta.dirname, '..', 'build');
 
 // --- minimal PNG encoder ------------------------------------------------------------------------
 
@@ -55,6 +56,35 @@ function encodePng(size, rgb) {
     chunk('IDAT', deflateSync(raw, { level: 9 })),
     chunk('IEND', Buffer.alloc(0)),
   ]);
+}
+
+/**
+ * Windows .ico container around already-PNG-encoded frames — supported natively since Vista, so
+ * this needs no new pixel-format code, just the small ICONDIR/ICONDIRENTRY binary header.
+ */
+function encodeIco(frames) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(1, 2); // type: icon
+  header.writeUInt16LE(frames.length, 4);
+
+  let offset = 6 + frames.length * 16;
+  const entries = [];
+  for (const { size, png } of frames) {
+    const entry = Buffer.alloc(16);
+    entry.writeUInt8(size >= 256 ? 0 : size, 0); // width, 0 means 256
+    entry.writeUInt8(size >= 256 ? 0 : size, 1); // height, 0 means 256
+    entry.writeUInt8(0, 2); // colour count: not palette-based
+    entry.writeUInt8(0, 3); // reserved
+    entry.writeUInt16LE(1, 4); // colour planes
+    entry.writeUInt16LE(24, 6); // bits per pixel — matches encodePng's truecolour, no alpha
+    entry.writeUInt32LE(png.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    offset += png.length;
+    entries.push(entry);
+  }
+
+  return Buffer.concat([header, ...entries, ...frames.map((f) => f.png)]);
 }
 
 // --- artwork -----------------------------------------------------------------------------------
@@ -177,3 +207,11 @@ for (const [name, size, noteHalf] of ICONS) {
   writeFileSync(join(OUT_DIR, name), png);
   console.log(`${name}  ${size}x${size}  ${(png.length / 1024).toFixed(1)} kB`);
 }
+
+// Windows installer/exe icon for the Electron desktop build (electron-builder reads build/icon.ico).
+const ICO_SIZES = [16, 32, 48, 256];
+const icoFrames = ICO_SIZES.map((size) => ({ size, png: render(size, 0.3) }));
+mkdirSync(ICO_DIR, { recursive: true });
+const ico = encodeIco(icoFrames);
+writeFileSync(join(ICO_DIR, 'icon.ico'), ico);
+console.log(`icon.ico  ${ICO_SIZES.join('/')}  ${(ico.length / 1024).toFixed(1)} kB`);
