@@ -72,12 +72,15 @@ A több repóhoz rendelt tétel mindegyik repo szűrésében megjelenik.
 mint a `list_todos`-é. Egy képernyőnyi tétel fölött ez a duplikátum-ellenőrzés gyors módja.
 
 **`get_ticket(id)`** — egy tétel teljes tartalma: cím, leírás, státusz, repók, időbélyegek és
-**minden bejegyzés**. Repofüggetlen, elég a sorszám. Akkor használja az agent, amikor ráirányítod
+**minden bejegyzés**, mindegyiknél jelölve, honnan jött: `[user]` a te bejegyzésed a felületről,
+`[agent]` pedig az, amit egy agent írt `update_ticket`-tel — így az agent nem nézi válasznak
+a saját korábbi jegyzetét. Repofüggetlen, elég a sorszám. Akkor használja az agent, amikor ráirányítod
 („csináld meg a 12-est", „mit írtam a 7-esre?"); magától nem érkezik ide semmi, ezért nincs értelme
 figyelnie.
 
 **`update_ticket(id, comment?, status?)`** — az agent visszajelzése: bejegyzést ír a tételhez, és/vagy
-`folyamatban`-ra állítja. **Lezárni nem tud** — az azt jelentené, hogy „ezt jóváhagytam", ami a te
+`folyamatban`-ra állítja. A bejegyzés ugyanabba a szálba kerül, amibe te írsz, de az agent oldaláról
+megjelölve, hogy a felületen látszik, melyik a tied. **Lezárni nem tud** — az azt jelentené, hogy „ezt jóváhagytam", ami a te
 döntésed, és egy kattintás a felületen.
 
 ## Web UI
@@ -95,6 +98,9 @@ a sima lista. Mindkettőben ugyanaz az adat és ugyanazok a műveletek.
   **összevonás** — ez a javítás, ha az agent egyszer másképp írta le a mappanevet
 - egy tételt megnyitva: leírás (markdown), státuszváltás `nyitott → folyamatban → lezárt`,
   bejegyzés-szál, repo/cím/leírás szerkesztés, törlés
+- a bejegyzéseken látszik a **forrás** (*Én* vagy *Claude*), az agent bejegyzései színes bal
+  szegélyt is kapnak — a szálba mindkét oldal ír, a saját döntésed nem keveredhet össze az agent
+  haladásjelentésével
 - a **repo szerkeszthető**, és egy todóhoz több repo is megadható (a mező felajánlja a már létező
   neveket, de újat is beírhatsz); legalább egynek maradnia kell, különben egyik szűrőben sem látszana
 - **kitűzés**: a kitűzött tételek a lista tetején maradnak (a kitűzés nem számít aktivitásnak,
@@ -110,6 +116,64 @@ a sima lista. Mindkettőben ugyanaz az adat és ugyanazok a műveletek.
   Frissítés* chip — a saját szerkesztéseid nem jelennek meg újdonságként
 - az *Értesítés* gombbal (egyszer kell megnyomni) asztali értesítést is kérhetsz az új tételekről;
   csak akkor jön, ha épp nem az appot nézed
+
+## Azure DevOps összekötés
+
+Egy todo összeköthető **egy** Azure DevOps work itemmel, és a státuszváltás átmegy a DevOps-ba is.
+A kapcsolat kizárólag itt tárolódik — a DevOps oldalán semmi nem jelzi, hogy létezik.
+
+Beállítás a fejléc fogaskerék gombjával:
+
+1. **Organization** (a `dev.azure.com/<organization>` névrész) és egy **hozzáférési token (PAT)**,
+   Work Items olvasás + írás joggal. Projektet nem kell megadni: a work item azonosító az egész
+   organizationben egyedi.
+2. *Mentés és kapcsolódás* után válassz egy **minta projektet és típust** — az érvényes
+   állapotnevek munkaelem-típusonként térnek el, ezért kell egy minta a legördülőkhöz. A minta nem
+   tárolódik, csak a belőle kiválasztott két állapotnév.
+3. Add meg, melyik DevOps állapot felel meg a **folyamatban** és a **megoldva** jelentésnek.
+
+Ezután a work item számát vagy a teljes URL-jét megadhatod **új todo felvételekor**, és utólag is,
+a megnyitott tételnél. Az összekötéskor lekérjük a jegyet (így az elgépelt szám azonnal kiderül), de
+**nem írunk semmit** a DevOps-ba.
+
+Ha megadtál work itemet, két pipa is megjelenik: a DevOps jegy **Leírása** és **Elfogadási
+kritériuma** átemelhető a todo leírásába. Alapból mindkettő be van kapcsolva, mert a beemelés csak
+**hozzáfűz** (soha nem ír felül), külön címsor alá — amit te írtál, az megmarad. A DevOps-ban ez a
+két mező formázott szöveg, ezt markdownná alakítjuk (bekezdés, sortörés, számozott és sima lista,
+kiemelés, link, táblázatcellák). Ha az adott jegynek nincs elfogadási kritériuma, egyszerűen nem
+kerül be semmi.
+
+Új todo felvételekor a két lépés sorrendje szándékos: **előbb létrejön a todo**, utána próbáljuk az
+összekötést. Egy elgépelt szám így nem viszi el a frissen megírt jegyzetet — a todo megmarad, a
+hibaüzenet pedig ezt meg is mondja.
+
+A leképezés:
+
+| Itt | Azure DevOps |
+|---|---|
+| nyitott | — (soha nem ír) |
+| folyamatban | a beállított „folyamatban" állapot |
+| lezárt | a beállított „megoldva" állapot |
+
+Visszafelé is működik: egy lezárt tétel folyamatban-ra állítása a work itemet is visszaviszi. A
+*nyitott* állapotnak nincs párja, tehát `lezárt → nyitott` esetén a work item megoldva marad.
+
+Amit érdemes tudni:
+
+- **A kiírás felülír.** Ha közben valaki kézzel továbbvitte a work itemet, a következő státuszváltás
+  visszahúzza — ez a fal a forrás.
+- **A helyi státusz sosem függ a DevOps-tól.** Ha a kiírás elhasal (nincs hálózat, lejárt token,
+  a típus nem ismeri az adott állapotot), a tétel itt akkor is átáll, a hiba pedig rákerül a
+  jegyre: a cetlin és a lista sorában piros jelzés, a megnyitott tételben a hibaüzenet és egy
+  *Újra* gomb. Automatikus újrapróbálkozás nincs.
+- **Az agent is mozgathatja.** Ha az `update_ticket`-tel folyamatban-ra állít egy összekötött
+  tételt, a kiírás elindul, de az agent nem várja meg — egy sikertelen kiírás így csak a következő
+  *Frissítés*nél tűnik fel.
+- **Egy work item egy todóhoz tartozhat**, különben az első lezárás megoldottra állítaná a jegyet,
+  miközben a másik todo még nyitva van.
+- **Egy todo egy work itemhez tartozhat.** A leválasztás és a todo törlése sem nyúl a DevOps-hoz.
+- A PAT titkosítatlanul kerül a közös `~/.todo-mcp/todos.db` fájlba, és a szerver soha nem adja
+  vissza — csak azt, hogy van-e elmentve.
 
 ## Telepítés alkalmazásként
 

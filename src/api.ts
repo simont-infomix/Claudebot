@@ -1,12 +1,12 @@
-import { Router, type Request, type Response } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import {
   ACTIVE_STATUSES,
   isStatus,
   normaliseRepos,
   type Status,
   type TodoFilter,
-  type TodoStore,
 } from './repo.js';
+import type { ImportFields, Result, TodoService } from './service.js';
 
 function badRequest(res: Response, error: string): void {
   res.status(400).json({ error });
@@ -69,8 +69,15 @@ function parseTodoFilter(req: Request, res: Response): TodoFilter | undefined {
   return { repos, statuses, query: query || undefined };
 }
 
-export function createApiRouter(store: TodoStore): Router {
+/** Hands back the value, or turns the service's own status + message into the response. */
+function send<T>(res: Response, result: Result<T>): void {
+  if (result.ok) res.json(result.value);
+  else res.status(result.status).json({ error: result.error });
+}
+
+export function createApiRouter(service: TodoService): Router {
   const router = Router();
+  const store = service.store;
 
   router.get('/todos', (req, res) => {
     const filter = parseTodoFilter(req, res);
@@ -103,12 +110,12 @@ export function createApiRouter(store: TodoStore): Router {
     res.status(201).json(todo);
   });
 
-  router.patch('/todos/:id', (req, res) => {
+  router.patch('/todos/:id', async (req, res) => {
     const id = parseId(req, res);
     if (id === undefined) return;
     if (!store.getTodo(id)) return notFound(res);
 
-    const { repos, title, description, status, pinned } = req.body ?? {};
+    const { repos, title, description, status, pinned, important } = req.body ?? {};
 
     let nextRepos: string[] | undefined;
     if (repos !== undefined) {
@@ -131,16 +138,26 @@ export function createApiRouter(store: TodoStore): Router {
     if (pinned !== undefined && typeof pinned !== 'boolean') {
       return badRequest(res, 'pinned must be a boolean');
     }
+    if (important !== undefined && typeof important !== 'boolean') {
+      return badRequest(res, 'important must be a boolean');
+    }
 
-    res.json(
-      store.updateTodo(id, {
+    // Through the service, not the store: a status change here also has to reach the linked work
+    // item. `wait: true` — the human is looking at the screen, so a failed push is worth the wait.
+    const { todo } = await service.updateTodo(
+      id,
+      {
         repos: nextRepos,
         title: nextTitle?.trim(),
         description: nextDescription,
         status: status as Status | undefined,
         pinned: pinned as boolean | undefined,
-      }),
+        important: important as boolean | undefined,
+      },
+      { wait: true },
     );
+    // The local write succeeded either way; a push failure travels back on the todo's own link.
+    res.json(todo);
   });
 
   router.delete('/todos/:id', (req, res) => {
@@ -164,7 +181,8 @@ export function createApiRouter(store: TodoStore): Router {
     const { body } = req.body ?? {};
     if (typeof body !== 'string' || body.trim() === '') return badRequest(res, 'body is required');
 
-    const comment = store.addComment(id, body.trim());
+    // Everything arriving here is the human typing in the web UI; agents write over /mcp.
+    const comment = store.addComment(id, body.trim(), 'user');
     if (!comment) return notFound(res);
     res.status(201).json(comment);
   });
@@ -203,6 +221,91 @@ export function createApiRouter(store: TodoStore): Router {
     const updated = store.renameRepo(from, name.trim());
     if (updated === 0) return notFound(res);
     res.json({ updated });
+  });
+
+  /**
+   * The Azure DevOps connection. The PAT is write-only across this boundary: it goes in, and only
+   * `hasPat` ever comes back out — it is stored unencrypted in a database shared by every project,
+   * so the least this surface can do is not hand it around.
+   */
+  router.get('/settings/devops', (_req, res) => {
+    res.json(service.settingsView());
+  });
+
+  router.put('/settings/devops', (req, res) => {
+    const { org, pat, stateInProgress, stateClosed } = req.body ?? {};
+    if (typeof org !== 'string') return badRequest(res, 'org must be a string');
+    if (pat !== undefined && typeof pat !== 'string') return badRequest(res, 'pat must be a string');
+    if (typeof stateInProgress !== 'string' || typeof stateClosed !== 'string') {
+      return badRequest(res, 'state names must be strings');
+    }
+    // `pat` absent keeps the stored one, so the panel can save without re-typing it.
+    res.json(service.saveSettings({ org, pat, stateInProgress, stateClosed }));
+  });
+
+  // Lookups for the settings panel: the valid state names live per work item type in a project,
+  // so you pick a project and a type there as a reference. Neither is stored.
+  router.get('/devops/projects', async (_req, res) => {
+    send(res, await service.projects());
+  });
+
+  router.get('/devops/projects/:project/types', async (req, res) => {
+    send(res, await service.workItemTypes(req.params.project));
+  });
+
+  router.get('/devops/projects/:project/types/:type/states', async (req, res) => {
+    send(res, await service.states(req.params.project, req.params.type));
+  });
+
+  /**
+   * Attach a work item: a number or any work item URL. Reads it back, but pushes nothing.
+   * `import` optionally appends the work item's description and acceptance criteria to the todo's
+   * own description, which is why the answer is the whole todo rather than just the link.
+   */
+  router.post('/todos/:id/devops', async (req, res) => {
+    const id = parseId(req, res);
+    if (id === undefined) return;
+
+    const { ref, import: imports } = req.body ?? {};
+    if (typeof ref !== 'string' || ref.trim() === '') return badRequest(res, 'ref is required');
+    if (imports !== undefined && (typeof imports !== 'object' || imports === null)) {
+      return badRequest(res, 'import must be an object');
+    }
+
+    send(
+      res,
+      await service.linkWorkItem(id, ref, {
+        description: (imports as ImportFields | undefined)?.description === true,
+        acceptance: (imports as ImportFields | undefined)?.acceptance === true,
+      }),
+    );
+  });
+
+  /** Drop the link. DevOps is not touched — the connection only ever existed on our side. */
+  router.delete('/todos/:id/devops', (req, res) => {
+    const id = parseId(req, res);
+    if (id === undefined) return;
+    if (!service.unlinkWorkItem(id)) return notFound(res);
+    res.status(204).end();
+  });
+
+  /** Manual retry after a failed push — there is no automatic one by design. */
+  router.post('/todos/:id/devops/push', async (req, res) => {
+    const id = parseId(req, res);
+    if (id === undefined) return;
+    send(res, await service.retryPush(id));
+  });
+
+  /*
+   * Anything that escapes a handler — including a rejected promise from one of the outbound calls
+   * above — must still leave here as JSON. Express's default handler renders an HTML page, which
+   * the web client would then fail to parse, turning a clear server-side error into a confusing
+   * one on screen.
+   */
+  router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    console.error('[api] unhandled error:', error);
+    if (res.headersSent) return;
+    res.status(500).json({ error: 'Váratlan szerverhiba.' });
   });
 
   return router;

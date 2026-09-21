@@ -1,5 +1,7 @@
 import type {
   Comment,
+  DevOpsLink,
+  DevOpsSettings,
   RepoSummary,
   Status,
   StatusFilter,
@@ -103,6 +105,7 @@ export function updateTodo(
     description?: string;
     status?: Status;
     pinned?: boolean;
+    important?: boolean;
   },
 ): Promise<Todo> {
   return request<Todo>(`/todos/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
@@ -118,6 +121,75 @@ export function renameRepo(repo: string, name: string): Promise<{ updated: numbe
 
 export function deleteTodo(id: number): Promise<void> {
   return request<void>(`/todos/${id}`, { method: 'DELETE' });
+}
+
+/**
+ * The Azure DevOps connection. `saveDevOpsSettings` carries the PAT one way only — the server answers
+ * with `hasPat`, never with the token, so it can never come back to the screen or into a cache.
+ */
+export function fetchDevOpsSettings(): Promise<DevOpsSettings> {
+  return request<DevOpsSettings>('/settings/devops');
+}
+
+export function saveDevOpsSettings(input: {
+  org: string;
+  /** Omit to keep the stored token; an empty string removes it. */
+  pat?: string;
+  stateInProgress: string;
+  stateClosed: string;
+}): Promise<DevOpsSettings> {
+  return request<DevOpsSettings>('/settings/devops', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Settings-panel lookups. The project and type are only a reference for the state lists. */
+export function fetchDevOpsProjects(): Promise<string[]> {
+  return request<string[]>('/devops/projects');
+}
+
+export function fetchDevOpsTypes(project: string): Promise<string[]> {
+  return request<string[]>(`/devops/projects/${encodeURIComponent(project)}/types`);
+}
+
+export function fetchDevOpsStates(project: string, type: string): Promise<string[]> {
+  return request<string[]>(
+    `/devops/projects/${encodeURIComponent(project)}/types/${encodeURIComponent(type)}/states`,
+  );
+}
+
+/**
+ * `ref` may be a work item number or any work item URL. Records the link and pushes nothing.
+ *
+ * `imports` appends the work item's description and acceptance criteria to the todo's own
+ * description — appends, never replaces — which is why the answer is the whole todo.
+ */
+export function linkWorkItem(
+  todoId: number,
+  ref: string,
+  imports: { description: boolean; acceptance: boolean },
+): Promise<Todo> {
+  return request<Todo>(`/todos/${todoId}/devops`, {
+    method: 'POST',
+    body: JSON.stringify({ ref, import: imports }),
+  });
+}
+
+export function unlinkWorkItem(todoId: number): Promise<void> {
+  return request<void>(`/todos/${todoId}/devops`, { method: 'DELETE' });
+}
+
+/** Manual retry of a failed push — there is no automatic one. */
+export function pushWorkItem(todoId: number): Promise<Todo> {
+  return request<Todo>(`/todos/${todoId}/devops/push`, { method: 'POST' });
+}
+
+/** Where the work item lives in the browser. Built here so the note only has to store the id. */
+export function workItemHref(org: string, link: DevOpsLink): string {
+  const base = `https://dev.azure.com/${encodeURIComponent(org.trim())}`;
+  const scope = link.project ? `/${encodeURIComponent(link.project)}` : '';
+  return `${base}${scope}/_workitems/edit/${link.work_item_id}`;
 }
 
 export function fetchComments(todoId: number): Promise<Comment[]> {

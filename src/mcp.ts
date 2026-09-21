@@ -6,8 +6,8 @@ import {
   type Status,
   type Ticket,
   type TodoListItem,
-  type TodoStore,
 } from './repo.js';
+import type { TodoService } from './service.js';
 
 const ADD_TODO_DESCRIPTION = `Park a question or task that needs a HUMAN decision, so you can keep working.
 
@@ -36,7 +36,9 @@ Matching is a plain case-insensitive substring — no operators, no stemming —
 distinctive words rather than a whole sentence. Same output as list_todos: no comment bodies.`;
 
 const GET_TICKET_DESCRIPTION = `Read one recorded item in full by its number: title, description,
-status, the repos it is filed under, and every comment the user has written on it.
+status, the repos it is filed under, and the whole comment thread. Each comment says where it came
+from: "user" is the human writing in the web UI, "agent" is a note left through update_ticket —
+possibly by you in an earlier session, so read those as your own progress notes, not as answers.
 
 Use it when the user points you at an item ("do #12", "what did I write on 7?"). This is a pull, not
 a channel: nothing new arrives here unless the user has been in the web UI, so do not poll it and do
@@ -48,14 +50,18 @@ const UPDATE_TICKET_DESCRIPTION = `Report back on a recorded item: leave a note 
 it to in_progress.
 
 Use it once you have acted on an item the user pointed you at — say what you did, what you found, or
-where it stalled. The note joins the same thread the user writes in, so the item carries its outcome
-instead of just the original question.
+where it stalled. The note joins the same thread the user writes in — marked as coming from the
+agent side, so the user can tell it from their own notes — and the item carries its outcome instead
+of just the original question.
 
 You cannot close an item. Closing means "I am satisfied with this", which is the user's judgement and
 one click for them in the web UI. Nor is this a place to ask a follow-up question: nobody is watching
 this end, so ask in the chat instead.`;
 
-export function createMcpServer(store: TodoStore): McpServer {
+export function createMcpServer(service: TodoService): McpServer {
+  // Reads go straight to the store; the one write that can also reach Azure DevOps goes through
+  // the service, so the MCP side mirrors a status change exactly like the web UI does.
+  const store = service.store;
   const server = new McpServer(
     { name: 'todo-mcp', version: '0.1.0' },
     { capabilities: { tools: {} } },
@@ -228,8 +234,14 @@ export function createMcpServer(store: TodoStore): McpServer {
         return { isError: true, content: [{ type: 'text' as const, text: `No todo with id #${id}.` }] };
       }
 
-      if (comment !== undefined) store.addComment(id, comment);
-      const todo = status !== undefined ? store.updateTodo(id, { status }) : store.getTodo(id);
+      if (comment !== undefined) store.addComment(id, comment, 'agent');
+      // wait: false — if the item is linked to a work item, the push is started and forgotten.
+      // An agent must never end up waiting on a network call, so the outcome lands on the item
+      // for the human to see rather than in this response.
+      const todo =
+        status !== undefined
+          ? (await service.updateTodo(id, { status }, { wait: false })).todo
+          : store.getTodo(id);
 
       const done = [comment !== undefined ? 'comment added' : '', status ? `status: ${status}` : '']
         .filter(Boolean)
@@ -277,7 +289,8 @@ function formatTicket(ticket: Ticket): string {
   ];
 
   for (const comment of ticket.comments) {
-    lines.push('', `[${iso(comment.created_at)}]`, comment.body.trim());
+    // Author first: without it an agent cannot tell the human's decision from its own old note.
+    lines.push('', `[${comment.author}] [${iso(comment.created_at)}]`, comment.body.trim());
   }
 
   return lines.join('\n');

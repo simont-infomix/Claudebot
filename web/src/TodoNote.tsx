@@ -7,16 +7,20 @@ import Typography from '@mui/material/Typography';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import FlagIcon from '@mui/icons-material/Flag';
+import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import ReplayIcon from '@mui/icons-material/Replay';
 import * as api from './api';
+import { WorkItemNoteBadge, pushFailure } from './DevOpsLink';
 import { TodoDetailDialog } from './TodoDetailDialog';
 import { formatAbsolute, formatRelative, plainPreview } from './format';
 import { copyTicketPrompt } from './prompt';
 import {
   HAND_FONT,
+  IMPORTANT_FLAG,
   INK,
   INK_SOFT,
   NOTE_PAPER,
@@ -27,12 +31,20 @@ import {
   noteTilt,
   pinColor,
 } from './board';
-import { STATUS_LABELS, type Status, type Todo, type TodoListItem } from './types';
+import {
+  STATUS_LABELS,
+  type DevOpsSettings,
+  type Status,
+  type Todo,
+  type TodoListItem,
+} from './types';
 
 type Props = {
   todo: TodoListItem;
   /** Repo names already in use, offered while editing in the dialog. */
   repoOptions: string[];
+  /** The Azure DevOps connection, or null when none is configured — then the feature is hidden. */
+  devops: DevOpsSettings | null;
   onChange: (todo: Todo) => void;
   onDelete: (id: number) => void;
   onCommentCountChange: (id: number, delta: number) => void;
@@ -44,6 +56,7 @@ type Props = {
 export function TodoNote({
   todo,
   repoOptions,
+  devops,
   onChange,
   onDelete,
   onCommentCountChange,
@@ -68,7 +81,14 @@ export function TodoNote({
       .finally(() => setBusy(false));
   };
 
-  const setStatus = (status: Status) => run(() => api.updateTodo(todo.id, { status }));
+  const setStatus = (status: Status) =>
+    run(async () => {
+      const updated = await api.updateTodo(todo.id, { status });
+      // The note has already moved on; a failed mirror to DevOps is reported, never rolled back.
+      const failure = pushFailure(updated);
+      if (failure) onError(failure);
+      return updated;
+    });
 
   return (
     <>
@@ -151,6 +171,20 @@ export function TodoNote({
           }}
         />
 
+        {todo.important && (
+          <FlagIcon
+            aria-hidden
+            sx={{
+              position: 'absolute',
+              top: 6,
+              left: 6,
+              fontSize: 18,
+              color: IMPORTANT_FLAG,
+              filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.35))',
+            }}
+          />
+        )}
+
         <Stack
           className="note-actions"
           direction="row"
@@ -170,6 +204,17 @@ export function TodoNote({
               <PushPinIcon sx={{ fontSize: 15 }} />
             ) : (
               <PushPinOutlinedIcon sx={{ fontSize: 15 }} />
+            )}
+          </NoteAction>
+          <NoteAction
+            title={todo.important ? 'Fontos jelölés levétele' : 'Megjelölés fontosként'}
+            disabled={busy}
+            onClick={() => run(() => api.updateTodo(todo.id, { important: !todo.important }))}
+          >
+            {todo.important ? (
+              <FlagIcon sx={{ fontSize: 15 }} />
+            ) : (
+              <FlagOutlinedIcon sx={{ fontSize: 15 }} />
             )}
           </NoteAction>
           {todo.status !== 'in_progress' && (
@@ -276,6 +321,9 @@ export function TodoNote({
             {STATUS_LABELS[todo.status]}
           </Box>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', color: INK_SOFT }}>
+            {devops?.configured && todo.devops && (
+              <WorkItemNoteBadge link={todo.devops} org={devops.org} />
+            )}
             {todo.comment_count > 0 && (
               <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
                 <ChatBubbleOutlineIcon sx={{ fontSize: 13 }} />
@@ -295,6 +343,7 @@ export function TodoNote({
         open={open}
         todo={todo}
         repoOptions={repoOptions}
+        devops={devops}
         onClose={() => setOpen(false)}
         onChange={onChange}
         onDelete={onDelete}

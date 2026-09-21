@@ -55,6 +55,11 @@ self.addEventListener('fetch', (event) => {
   // serving one would flag the whole screen as stale. Straight to the network or nothing.
   if (url.pathname === '/api/todos/head') return;
 
+  // Live probes into Azure DevOps (the settings panel's project/type/state lists). A cached
+  // answer would describe somebody else's organization or a token that has since changed, and
+  // serving one would flag the whole screen as stale over a lookup the todos do not depend on.
+  if (url.pathname.startsWith('/api/devops/')) return;
+
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(networkFirst(request, DATA_CACHE));
     return;

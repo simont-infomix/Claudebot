@@ -48,17 +48,39 @@ The key structural rule: **all SQL lives in `TodoStore` (`src/repo.ts`)**, and b
 (`src/mcp.ts`) and the JSON API (`src/api.ts`) go through it. Neither writes SQL directly. `repo.ts`
 also owns the `Status` union and `ACTIVE_STATUSES`.
 
+Its counterpart: **all Azure DevOps HTTP lives in `src/devops.ts`**, which knows nothing about the
+data model, and `TodoService` (`src/service.ts`) is the thin layer that joins the two. A status
+change is the one operation with two sides, so both surfaces call `service.updateTodo` rather than
+`store.updateTodo` — that is what keeps the web UI and the MCP tool from drifting on which
+transitions mirror to DevOps. `server.ts` builds one `TodoService` and hands it to both.
+
 Data model (`src/db.ts`, schema applied idempotently on every open): `todos` (title, description,
-status ∈ `open|in_progress|closed`, `pinned`, timestamps as epoch ms), `todo_repos` and `comments`,
-the latter two with `ON DELETE CASCADE`. Writing or editing a comment also bumps the parent todo's
-`updated_at`, since lists are ordered `pinned DESC, updated_at DESC` — activity floats an item to the
-top; so does re-pinning an item to other repos. **Kitűzés deliberately does not bump `updated_at`**
-(`TodoStore.updateTodo` tracks that as `activity`): it is a shelf position, and bumping would leave
-an unpinned item stuck at the top of a list that claims to be ordered by activity.
+status ∈ `open|in_progress|closed`, `pinned`, `important`, timestamps as epoch ms), `todo_repos`,
+`comments` and `todo_devops`, the last three with `ON DELETE CASCADE`, plus a key/value `settings`
+table. The three later tables need no `migrate()` step: `CREATE TABLE IF NOT EXISTS` on every open
+is the whole migration for a table that is simply new. Writing or editing a comment also bumps the
+parent todo's `updated_at`, since lists are ordered `pinned DESC, updated_at DESC` — activity floats
+an item to the top; so does re-pinning an item to other repos. **Kitűzés deliberately does not bump
+`updated_at`** (`TodoStore.updateTodo` tracks that as `activity`): it is a shelf position, and
+bumping would leave an unpinned item stuck at the top of a list that claims to be ordered by
+activity. **Fontos (`important`) follows the same rule for the same reason**, but is otherwise
+unrelated to `pinned`: it is a purely visual "this matters" marker (a red flag badge in the UI) and
+never affects ordering — the two are independent booleans an item can carry in any combination.
+
+A comment carries an **`author` ∈ `user|agent`** (`CommentAuthor` in `repo.ts`), because the one
+thread is written from both ends: the human needs to tell their own decision from an agent's
+progress note, and `get_ticket` has to say which of its comments are the agent's own earlier notes
+rather than an answer. It is never taken from a request body — `TodoStore.addComment` requires it
+and each surface passes the side it *is* (`api.ts` → `user`, `mcp.ts` → `agent`), so an agent cannot
+file a note as the human. Editing a comment leaves the author alone. Migrated databases get `user`
+for every pre-existing comment: nothing recorded the origin, and falsely crediting an agent would be
+the worse of the two mistakes.
 
 `migrate()` in `db.ts` is the one place for schema evolution. Each step keys off what `PRAGMA
 table_info` actually reports rather than a version counter, so it is safe on every open — that is
-how both the `repo` column removal and the later `pinned` addition work.
+how the `repo` column removal and the later `pinned`/`important` additions all work. It reads a
+second `PRAGMA table_info` for `comments` (the `author` column), since that step is not about
+`todos` at all.
 
 Repo membership is **many-to-many**, and that asymmetry is the point: an agent files under exactly
 one repo (`add_todo` takes a single `repo` string), while the human can pin an item to several in the
@@ -81,6 +103,62 @@ with what the list itself would return. Search is a `LIKE` over title + descript
 escaped (`likeTerm`); SQLite only case-folds ASCII, so accented capitals do not match their lowercase
 form — acceptable for a personal list, and the alternative is an ICU build.
 
+### Azure DevOps
+
+A todo can be tied to **one** work item, and the link exists only here — nothing in DevOps records
+it. `todo_devops` is keyed by `todo_id` and unique on `work_item_id`, so the relation is 1:1 in both
+directions: without the second constraint the first close would resolve a work item while another
+todo pointing at it is still open. Linking **never pushes** — it reads the item back to prove it
+exists and to cache its project, type and title, and the DevOps side stays untouched until the next
+status change. Like `pinned` and `important`, linking does not bump `updated_at`: it is a label, not
+work done.
+
+Linking optionally copies the work item's **description and acceptance criteria** into the todo's
+own description (`ImportFields` → `importedSections` in `service.ts`). It always **appends** under a
+Hungarian heading, never replaces: what the human wrote is the part that cannot be recovered. That
+append *is* content, so it does bump `updated_at` — unlike the link itself. Because of it, `POST
+/todos/:id/devops` answers with the whole todo rather than just the link. Both fields are HTML on
+the DevOps side, converted by `htmlToMarkdown` in `devops.ts` — hand-rolled rather than a
+dependency, covering what the DevOps editor actually emits (paragraphs, breaks, ordered and
+unordered lists, emphasis, links, table cells, entities) and dropping the rest of the markup.
+
+`getWorkItem` deliberately sends **no `fields=` filter**: asking for a field a work item type does
+not define is a 400 from this API, and `Microsoft.VSTS.Common.AcceptanceCriteria` is exactly such a
+field — an Agile Task has none. The whole field bag costs a bigger response and never fails.
+
+The mapping is `in_progress` → the configured "folyamatban" state, `closed` → the configured
+"megoldva" state, and **`open` pushes nothing** — re-opening here is our own housekeeping, and a new
+todo must not move a work item somebody else is watching. It runs in both directions, so
+`closed → in_progress` walks the work item back. `targetState` in `service.ts` is the single place
+that decides this. The PATCH is a **blind overwrite**: no revision check, because this wall is the
+source of truth.
+
+**The local status change never depends on DevOps.** The store write happens first and stands
+whatever the push does; a failure is recorded on the link (`error`, `error_at`) rather than failing
+the request. That is also why the link carries its own bookkeeping at all: `update_ticket` pushes
+**fire-and-forget** (`wait: false`), since an agent must never wait on a network call, and a silent
+failure would otherwise have nowhere to land. The web UI pushes with `wait: true` and reads the
+failure off the returned todo (`pushFailure` in `web/src/DevOpsLink.tsx`) — only ever right after a
+status change, since at any other moment the stored error may be an old one. Retry is manual only.
+
+The MCP surface is deliberately **unchanged**: no tool mentions DevOps, `get_ticket` does not expose
+the link, and linking is the human's job in the web UI. An agent moving an item to `in_progress`
+moves the work item without knowing it exists.
+
+Configuration lives in the `settings` table, not `config.ts`: the packaged Electron app has no shell
+to export env vars into, so it is edited in the web UI (`DevOpsSettingsDialog`). Only the
+organization, the PAT and the two state names are stored — **no project**, because a work item id is
+unique organization-wide and `System.TeamProject` comes back with the item. The panel does make you
+pick a project and a work item type, but only as a *reference* for the state dropdowns (valid states
+are defined per type), and neither is saved. The PAT is **write-only across the API boundary**:
+`GET /api/settings/devops` answers `hasPat`, never the token, and it never reaches a log. Omitting
+`pat` on a save keeps the stored one; an empty string clears it. When nothing is configured, every
+DevOps control hides itself — the header's settings button is the one entry point that must stay.
+
+`/api/devops/*` is passed straight through the service worker, for the same reason as
+`/api/todos/head`: a cached answer would describe another organization or a token that has since
+changed, and serving one would flag the whole screen as stale over a lookup the todos do not use.
+
 `src/config.ts` centralises host/port/paths. Port is `TODO_MCP_PORT` (default 4321), and
 `ALLOWED_HOSTS` is derived from it — `/mcp` rejects any other `Host` header (DNS-rebinding guard,
 replacing the SDK's deprecated option). No auth: single-user, single-machine, loopback only.
@@ -89,7 +167,8 @@ replacing the SDK's deprecated option). No auth: single-user, single-machine, lo
 
 React 19 + MUI 9 + Emotion, Vite with `root: 'web'`, built into `dist/web`. `web/src/types.ts`
 **hand-mirrors** the server types from `src/repo.ts` — there is no shared package or codegen, so a
-change to `Todo`/`Comment`/`Status` must be made in both files. `web/src/api.ts` is the only place
+change to `Todo`/`Comment`/`Status`/`DevOpsLink` must be made in both files (`DevOpsSettings`
+mirrors `DevOpsSettingsView` in `src/service.ts`). `web/src/api.ts` is the only place
 that talks to `/api`.
 
 `App.tsx` offers **two equal views** over the same data, switched by the *Fal / Lista* toggle in the
@@ -104,6 +183,12 @@ additionally styles the header, filter strip, empty state and new-todo form as p
 cork on `body` via `GlobalStyles` — which is why those bits are conditional on `view` rather than
 unconditional. `NewTodoForm`/`CommentThread` take an optional `sheet`/`onSheet` flag for that; without
 it they render exactly as they did before the board existed.
+
+`CommentThread` attributes every entry: an icon plus `COMMENT_AUTHOR_LABELS` ("Én" / "Claude") above
+the body, and a coloured left edge on the agent's slips. The label is above the text, not next to the
+timestamp underneath, because who wrote a note changes how it reads — a decision to follow versus a
+report to check. The Hungarian labels name the two sides as the human thinks of them, while the
+stored value stays `agent`; any MCP client can write a note, but it is Claude in practice.
 
 The repo filter is a **multi-select**: checkable menu items plus deletable chips in the closed select,
 so several repos can be watched side by side and dropped one at a time (empty selection = every repo).
@@ -125,11 +210,28 @@ so before you commit.
 The search box is debounced 300 ms into a separate `query` state, which is what `load` and the poll
 depend on — the raw `search` value never reaches the server, so typing does not spam it.
 
-**Kitűzés** (`pinned`) and **prompt copying** are on all three surfaces: the note's hover toolbar, the
-row summary, and the dialog header. `prompt.ts` builds the paste-ready Hungarian instruction — it is
-the bridge between the wall and the agent, so the only thing that has to travel by hand is the number.
-The board note also carries quick status buttons; everything in that toolbar stops propagation, and
-the note's own Enter/Space handler ignores events whose target is not the note itself.
+The **work item link** is on all three surfaces too, but in three sizes: an inky badge on the note
+(`WorkItemNoteBadge`), a chip on the row (`WorkItemChip`), and the full controls — link, unlink,
+last successful push, error with a retry button — in the dialog and the expanded row
+(`DevOpsSection`, all in `web/src/DevOpsLink.tsx`). The badge and the chip carry exactly two facts:
+which work item, and whether the last push got there. Both stop propagation, or opening DevOps
+would also open the note underneath.
+
+A work item can also be attached straight from `NewTodoForm`, which does it in **two steps and in
+this order**: the todo is created first and stands whatever happens next, then the link is
+attempted. A mistyped number must not cost you the note you just wrote, so the failure is reported
+while the todo stays — the same "local write never depends on DevOps" rule as the status push. Both
+places share `ImportChoices` for the two import checkboxes, which default to on (the import only
+appends, so saying yes cannot lose anything) and only appear once a reference has been typed.
+
+**Kitűzés** (`pinned`), **fontos** (`important`) and **prompt copying** are on all three surfaces: the
+note's hover toolbar, the row summary, and the dialog header. `prompt.ts` builds the paste-ready
+Hungarian instruction — it is the bridge between the wall and the agent, so the only thing that has
+to travel by hand is the number. The board note also carries quick status buttons; everything in
+that toolbar stops propagation, and the note's own Enter/Space handler ignores events whose target is
+not the note itself. Unlike the pin, the flag also renders **outside** the hover toolbar — a small red
+`FlagIcon` badge in the note's top-left corner whenever `important` is set — since a marker meant to
+say "this matters" would defeat its purpose if it only showed up on hover.
 
 `board.ts` grows `ageStain`/`ageOverlay`: a note yellows from two weeks to two months since its last
 activity, painted as a `mixBlendMode: multiply` `::before` wash with the dog-ear curling further.
@@ -196,7 +298,8 @@ both schemes.
   what stops an agent from treating this as its own scratch todo list or expecting an answer back.
   `GET_TICKET_DESCRIPTION` carries the same weight — it has to say "pull, on the user's cue" clearly
   enough that no agent starts polling it for a reply, and `UPDATE_TICKET_DESCRIPTION` has to explain
-  *why* closing is missing rather than just omitting it. Treat them as product surface, not comments.
+  *why* closing is missing rather than just omitting it, and say that its note lands on the thread
+  marked as the agent's. Treat them as product surface, not comments.
 - The MCP registration is user-scoped and shared by every project:
   `claude mcp add --transport http todo-mcp http://127.0.0.1:4321/mcp --scope user`. The server does
   not start automatically; if it is down, MCP calls simply fail.

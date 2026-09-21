@@ -37,15 +37,24 @@ import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
+import SettingsIcon from '@mui/icons-material/Settings';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import * as api from './api';
+import { DevOpsSettingsDialog } from './DevOpsSettingsDialog';
 import { NewTodoForm } from './NewTodoForm';
 import { TodoNote } from './TodoNote';
 import { TodoRow } from './TodoRow';
 import { CORK_DARK, CORK_LIGHT, HAND_FONT, INK, NOTE_PAPER, PAPER_TEXTURE } from './board';
 import { notifyNewTodos, useInstallPrompt, useNotificationPrompt, useOnline } from './pwa';
-import type { RepoSummary, StatusFilter, Todo, TodoHead, TodoListItem } from './types';
+import type {
+  DevOpsSettings,
+  RepoSummary,
+  StatusFilter,
+  Todo,
+  TodoHead,
+  TodoListItem,
+} from './types';
 
 const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'active', label: 'Aktívak (nyitott + folyamatban)' },
@@ -95,6 +104,13 @@ export function App() {
   const [stale, setStale] = useState(false);
   /** Set by the poll when the server's list no longer matches what is on screen. */
   const [pending, setPending] = useState<TodoHead | null>(null);
+  /**
+   * The Azure DevOps connection. Null until it has been read; `configured` is what decides whether
+   * the linking controls appear at all — an unconfigured connection means no DevOps UI anywhere,
+   * only this panel.
+   */
+  const [devops, setDevops] = useState<DevOpsSettings | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   /** What the list looked like at the last successful load — the thing the poll compares against. */
   const baseline = useRef<TodoHead | null>(null);
   /** The freshest arrival already announced, so one batch is not notified twice. */
@@ -137,6 +153,16 @@ export function App() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Read once at startup: whether the wall shows DevOps controls does not change under the user.
+  useEffect(() => {
+    api
+      .fetchDevOpsSettings()
+      .then(setDevops)
+      .catch(() => {
+        // Server down or an older build: the feature simply stays hidden.
+      });
+  }, []);
 
   /** Re-read where the server stands without touching the screen — used after our own writes. */
   const syncBaseline = useCallback(() => {
@@ -251,6 +277,7 @@ export function App() {
 
   const itemProps = {
     repoOptions,
+    devops,
     onChange: handleChange,
     onDelete: handleDelete,
     onCommentCountChange: handleCommentCountChange,
@@ -491,6 +518,15 @@ export function App() {
               Telepítés
             </Button>
           )}
+          <Tooltip title="Azure DevOps kapcsolat">
+            <IconButton
+              aria-label="Azure DevOps kapcsolat"
+              onClick={() => setSettingsOpen(true)}
+              sx={board ? ON_CORK : undefined}
+            >
+              <SettingsIcon />
+            </IconButton>
+          </Tooltip>
           <Button
             startIcon={<RefreshIcon />}
             onClick={() => void load()}
@@ -520,6 +556,7 @@ export function App() {
           <NewTodoForm
             repos={repoOptions}
             sheet={board}
+            devops={devops}
             onCreated={handleCreated}
             onCancel={() => setShowForm(false)}
             onError={setError}
@@ -568,6 +605,16 @@ export function App() {
           </Box>
         )}
       </Stack>
+
+      {/* The one entry point that is always there: without it a fresh install could never be
+          configured, since every other DevOps control hides itself until it is. */}
+      {settingsOpen && (
+        <DevOpsSettingsDialog
+          settings={devops ?? { org: '', stateInProgress: '', stateClosed: '', hasPat: false, configured: false }}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={setDevops}
+        />
+      )}
 
       {renaming && (
         <RepoRenameDialog

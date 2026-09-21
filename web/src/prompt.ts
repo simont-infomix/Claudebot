@@ -10,7 +10,9 @@ export function ticketPrompt(todo: { id: number; title: string }): string {
     `#${todo.id} – ${todo.title}\n\n` +
     `Olvasd ki a részleteket a todo-mcp get_ticket(${todo.id}) toolljával ` +
     `(leírás és a hozzá írt megjegyzéseim), és valósítsd meg. ` +
-    `Ha kész vagy, az update_ticket toollal jegyezd fel, mi lett belőle.`
+    `Ha kész vagy, a review skill használatával ellenőriztesd a kódod. `+
+    `Javítsd a felmerülő problémákat, ha nem szükséges hozzá emberi döntés, vagy jóváhagyás. ` +
+    `Végül az update_ticket toollal jegyezd fel, mi lett belőle.`
   );
 }
 

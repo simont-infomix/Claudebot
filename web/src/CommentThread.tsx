@@ -11,9 +11,11 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutlined';
 import SendIcon from '@mui/icons-material/Send';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import * as api from './api';
-import type { Comment } from './types';
+import { COMMENT_AUTHOR_LABELS, type Comment } from './types';
 import { formatAbsolute, formatRelative } from './format';
 import { Markdown } from './Markdown';
 
@@ -120,6 +122,12 @@ export function CommentThread({ todoId, onSheet = false, onCountChange, onError 
           variant="outlined"
           sx={(theme) => ({
             p: 1.5,
+            // An agent's note gets a coloured edge, so the two sides of the thread are one glance
+            // apart even before the attribution line is read.
+            ...(comment.author === 'agent' && {
+              borderLeftWidth: 3,
+              borderLeftColor: 'info.main',
+            }),
             ...(onSheet && {
               backgroundColor: 'rgba(255,255,255,0.55)',
               ...theme.applyStyles('dark', { backgroundColor: 'rgba(255,255,255,0.05)' }),
@@ -153,13 +161,25 @@ export function CommentThread({ todoId, onSheet = false, onCountChange, onError 
           ) : (
             <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
               <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                <Markdown>{comment.body}</Markdown>
-                <Tooltip title={formatAbsolute(comment.created_at)} placement="right">
-                  <Typography variant="caption" color="text.secondary">
-                    {formatRelative(comment.created_at)}
-                    {comment.updated_at !== comment.created_at ? ' · szerkesztve' : ''}
+                {/* Who wrote it comes before the text: an agent's progress note and the human's
+                    own decision read very differently. */}
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mb: 0.5 }}>
+                  {comment.author === 'agent' ? (
+                    <SmartToyOutlinedIcon sx={{ fontSize: 16, color: 'info.main' }} />
+                  ) : (
+                    <PersonOutlineIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                  )}
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                    {COMMENT_AUTHOR_LABELS[comment.author]}
                   </Typography>
-                </Tooltip>
+                  <Tooltip title={formatAbsolute(comment.created_at)} placement="right">
+                    <Typography variant="caption" color="text.secondary">
+                      · {formatRelative(comment.created_at)}
+                      {comment.updated_at !== comment.created_at ? ' · szerkesztve' : ''}
+                    </Typography>
+                  </Tooltip>
+                </Stack>
+                <Markdown>{comment.body}</Markdown>
               </Box>
               <Stack direction="row">
                 <IconButton

@@ -22,20 +22,33 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import FlagIcon from '@mui/icons-material/Flag';
+import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import * as api from './api';
 import { CommentThread } from './CommentThread';
+import { DevOpsSection, WorkItemChip, pushFailure } from './DevOpsLink';
 import { Markdown } from './Markdown';
 import { RepoPicker } from './RepoPicker';
 import { formatAbsolute, formatRelative } from './format';
 import { copyTicketPrompt } from './prompt';
-import { STATUS_COLORS, STATUS_LABELS, STATUSES, type Status, type Todo, type TodoListItem } from './types';
+import {
+  STATUS_COLORS,
+  STATUS_LABELS,
+  STATUSES,
+  type DevOpsSettings,
+  type Status,
+  type Todo,
+  type TodoListItem,
+} from './types';
 
 type Props = {
   todo: TodoListItem;
   /** Repo names already in use, offered while editing. */
   repoOptions: string[];
+  /** The Azure DevOps connection, or null when none is configured — then the feature is hidden. */
+  devops: DevOpsSettings | null;
   onChange: (todo: Todo) => void;
   onDelete: (id: number) => void;
   onCommentCountChange: (id: number, delta: number) => void;
@@ -46,6 +59,7 @@ type Props = {
 export function TodoRow({
   todo,
   repoOptions,
+  devops,
   onChange,
   onDelete,
   onCommentCountChange,
@@ -73,7 +87,13 @@ export function TodoRow({
 
   const changeStatus = (status: Status) => {
     if (status === todo.status) return;
-    void run(async () => onChange(await api.updateTodo(todo.id, { status })));
+    void run(async () => {
+      const updated = await api.updateTodo(todo.id, { status });
+      onChange(updated);
+      // The row has already changed here; a failed mirror to DevOps is reported, not undone.
+      const failure = pushFailure(updated);
+      if (failure) onError(failure);
+    });
   };
 
   const startEdit = () => {
@@ -141,6 +161,9 @@ export function TodoRow({
               size="small"
               color={STATUS_COLORS[todo.status]}
             />
+            {devops?.configured && todo.devops && (
+              <WorkItemChip link={todo.devops} org={devops.org} />
+            )}
             {todo.comment_count > 0 && (
               <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', color: 'text.secondary' }}>
                 <ChatBubbleOutlineIcon sx={{ fontSize: 14 }} />
@@ -181,6 +204,25 @@ export function TodoRow({
                   <PushPinIcon fontSize="small" color="warning" />
                 ) : (
                   <PushPinOutlinedIcon fontSize="small" />
+                )}
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={todo.important ? 'Fontos jelölés levétele' : 'Megjelölés fontosként'}>
+              <IconButton
+                size="small"
+                aria-label={todo.important ? 'Fontos jelölés levétele' : 'Megjelölés fontosként'}
+                disabled={busy}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void run(async () =>
+                    onChange(await api.updateTodo(todo.id, { important: !todo.important })),
+                  );
+                }}
+              >
+                {todo.important ? (
+                  <FlagIcon fontSize="small" color="error" />
+                ) : (
+                  <FlagOutlinedIcon fontSize="small" />
                 )}
               </IconButton>
             </Tooltip>
@@ -276,6 +318,17 @@ export function TodoRow({
               </Button>
             </Stack>
           </Stack>
+
+          {devops?.configured && (
+            <DevOpsSection
+              todo={todo}
+              settings={devops}
+              busy={busy}
+              onChange={onChange}
+              onNotice={onNotice}
+              onError={onError}
+            />
+          )}
 
           <CommentThread
             todoId={todo.id}

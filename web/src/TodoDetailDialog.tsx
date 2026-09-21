@@ -17,22 +17,34 @@ import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import FlagIcon from '@mui/icons-material/Flag';
+import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import * as api from './api';
 import { CommentThread } from './CommentThread';
+import { DevOpsSection, pushFailure } from './DevOpsLink';
 import { Markdown } from './Markdown';
 import { RepoPicker } from './RepoPicker';
 import { HAND_FONT, NOTE_PAPER, PAPER_TEXTURE, SHEET } from './board';
 import { formatAbsolute } from './format';
 import { copyTicketPrompt } from './prompt';
-import { STATUS_LABELS, STATUSES, type Status, type Todo, type TodoListItem } from './types';
+import {
+  STATUS_LABELS,
+  STATUSES,
+  type DevOpsSettings,
+  type Status,
+  type Todo,
+  type TodoListItem,
+} from './types';
 
 type Props = {
   open: boolean;
   todo: TodoListItem;
   /** Repo names already in use, offered while editing. */
   repoOptions: string[];
+  /** The Azure DevOps connection, or null when none is configured — then the feature is hidden. */
+  devops: DevOpsSettings | null;
   onClose: () => void;
   onChange: (todo: Todo) => void;
   onDelete: (id: number) => void;
@@ -46,6 +58,7 @@ export function TodoDetailDialog({
   open,
   todo,
   repoOptions,
+  devops,
   onClose,
   onChange,
   onDelete,
@@ -78,7 +91,13 @@ export function TodoDetailDialog({
 
   const changeStatus = (status: Status) => {
     if (status === todo.status) return;
-    void run(async () => onChange(await api.updateTodo(todo.id, { status })));
+    void run(async () => {
+      const updated = await api.updateTodo(todo.id, { status });
+      onChange(updated);
+      // The local change stands even when the mirror to DevOps did not: say so, do not undo it.
+      const failure = pushFailure(updated);
+      if (failure) onError(failure);
+    });
   };
 
   const startEdit = () => {
@@ -144,6 +163,7 @@ export function TodoDetailDialog({
             <Typography variant="caption" color="text.secondary">
               #{todo.id} · {todo.repos.join(', ')} · {formatAbsolute(todo.created_at)}
               {todo.pinned ? ' · kitűzve' : ''}
+              {todo.important ? ' · fontos' : ''}
             </Typography>
             <Typography
               component="h2"
@@ -182,6 +202,24 @@ export function TodoDetailDialog({
                 <PushPinIcon fontSize="small" color="warning" />
               ) : (
                 <PushPinOutlinedIcon fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={todo.important ? 'Fontos jelölés levétele' : 'Megjelölés fontosként'}>
+            <IconButton
+              size="small"
+              aria-label={todo.important ? 'Fontos jelölés levétele' : 'Megjelölés fontosként'}
+              disabled={busy}
+              onClick={() =>
+                void run(async () =>
+                  onChange(await api.updateTodo(todo.id, { important: !todo.important })),
+                )
+              }
+            >
+              {todo.important ? (
+                <FlagIcon fontSize="small" color="error" />
+              ) : (
+                <FlagOutlinedIcon fontSize="small" />
               )}
             </IconButton>
           </Tooltip>
@@ -281,6 +319,17 @@ export function TodoDetailDialog({
               </Button>
             </Stack>
           </Stack>
+
+          {devops?.configured && (
+            <DevOpsSection
+              todo={todo}
+              settings={devops}
+              busy={busy}
+              onChange={onChange}
+              onNotice={onNotice}
+              onError={onError}
+            />
+          )}
 
           <CommentThread
             todoId={todo.id}

@@ -10,6 +10,35 @@ export function isStatus(value: unknown): value is Status {
   return typeof value === 'string' && (STATUSES as readonly string[]).includes(value);
 }
 
+/**
+ * Which end of the thread a comment came from. Not a user account — there is exactly one human
+ * here — but the two surfaces that can write: the web UI (`user`) and an MCP client (`agent`).
+ */
+export const COMMENT_AUTHORS = ['user', 'agent'] as const;
+export type CommentAuthor = (typeof COMMENT_AUTHORS)[number];
+
+/**
+ * A todo tied to one Azure DevOps work item. The link only exists here — nothing in DevOps knows
+ * about it — and it carries its own push bookkeeping, since an agent's fire-and-forget push has
+ * nowhere else to leave a failure for the human to find.
+ */
+export type DevOpsLink = {
+  todo_id: number;
+  work_item_id: number;
+  /** Only used to build a clickable link; the id alone identifies the item org-wide. */
+  project: string;
+  work_item_type: string;
+  work_item_title: string;
+  /** The state DevOps last reported, and the one we last wrote successfully ('' = never). */
+  remote_state: string;
+  pushed_state: string;
+  pushed_at: number | null;
+  /** The last failed push, cleared by the next successful one. */
+  error: string | null;
+  error_at: number | null;
+  created_at: number;
+};
+
 export type Todo = {
   id: number;
   /** Never empty; agents file exactly one, the human can attach the item to several. */
@@ -19,6 +48,10 @@ export type Todo = {
   status: Status;
   /** Human-only marker that floats an item above the `updated_at` ordering. */
   pinned: boolean;
+  /** Human-only "this matters" marker. Purely visual — unlike `pinned`, it does not affect order. */
+  important: boolean;
+  /** The linked work item, or null. Human-only: agents never see or set it. */
+  devops: DevOpsLink | null;
   created_at: number;
   updated_at: number;
 };
@@ -34,6 +67,8 @@ export type Comment = {
   id: number;
   todo_id: number;
   body: string;
+  /** Set by whichever surface wrote it; editing a note never changes who it came from. */
+  author: CommentAuthor;
   created_at: number;
   updated_at: number;
 };
@@ -57,6 +92,24 @@ export function normaliseRepos(repos: string[]): string[] {
 const REPOS_JSON = `(SELECT json_group_array(repo)
                      FROM (SELECT repo FROM todo_repos WHERE todo_id = t.id ORDER BY rowid))`;
 
+/**
+ * Same trick for the work item link: one row still carries one todo, and an unlinked todo simply
+ * gets SQL NULL here rather than a join that would have to be filtered out again.
+ */
+const DEVOPS_JSON = `(SELECT json_object(
+                        'todo_id', d.todo_id,
+                        'work_item_id', d.work_item_id,
+                        'project', d.project,
+                        'work_item_type', d.work_item_type,
+                        'work_item_title', d.work_item_title,
+                        'remote_state', d.remote_state,
+                        'pushed_state', d.pushed_state,
+                        'pushed_at', d.pushed_at,
+                        'error', d.error,
+                        'error_at', d.error_at,
+                        'created_at', d.created_at)
+                      FROM todo_devops d WHERE d.todo_id = t.id)`;
+
 function num(value: unknown): number {
   return typeof value === 'bigint' ? Number(value) : (value as number);
 }
@@ -69,6 +122,9 @@ function toTodo(row: Row): Todo {
     description: row.description as string,
     status: row.status as Status,
     pinned: num(row.pinned) === 1,
+    important: num(row.important) === 1,
+    // NULL when nothing is linked; json_object already produced JS-shaped numbers and nulls.
+    devops: row.devops ? (JSON.parse(row.devops as string) as DevOpsLink) : null,
     created_at: num(row.created_at),
     updated_at: num(row.updated_at),
   };
@@ -84,6 +140,7 @@ function toComment(row: Row): Comment {
     id: num(row.id),
     todo_id: num(row.todo_id),
     body: row.body as string,
+    author: row.author as CommentAuthor,
     created_at: num(row.created_at),
     updated_at: num(row.updated_at),
   };
@@ -127,7 +184,7 @@ export class TodoStore {
     const { sql, params } = this.buildFilter(filter);
     const rows = this.db
       .prepare(
-        `SELECT t.*, ${REPOS_JSON} AS repos,
+        `SELECT t.*, ${REPOS_JSON} AS repos, ${DEVOPS_JSON} AS devops,
                 (SELECT COUNT(*) FROM comments c WHERE c.todo_id = t.id) AS comment_count
          FROM todos t
          ${sql}
@@ -151,7 +208,9 @@ export class TodoStore {
 
   getTodo(id: number): Todo | undefined {
     const row = this.db
-      .prepare(`SELECT t.*, ${REPOS_JSON} AS repos FROM todos t WHERE t.id = ?`)
+      .prepare(
+        `SELECT t.*, ${REPOS_JSON} AS repos, ${DEVOPS_JSON} AS devops FROM todos t WHERE t.id = ?`,
+      )
       .get(id) as Row | undefined;
     return row ? toTodo(row) : undefined;
   }
@@ -183,6 +242,7 @@ export class TodoStore {
       description?: string;
       status?: Status;
       pinned?: boolean;
+      important?: boolean;
     },
   ): Todo | undefined {
     if (!this.getTodo(id)) return undefined;
@@ -206,11 +266,16 @@ export class TodoStore {
       sets.push('pinned = ?');
       params.push(patch.pinned ? 1 : 0);
     }
+    if (patch.important !== undefined) {
+      sets.push('important = ?');
+      params.push(patch.important ? 1 : 0);
+    }
     if (patch.repos !== undefined) this.setRepos(id, patch.repos);
 
     // Re-pinning an item to other repos is activity, so it bumps updated_at like an edit does.
-    // Kitűzés is not: it is a shelf position, and bumping would make unpinning leave the item
-    // stuck at the top of a list that claims to be ordered by activity.
+    // Kitűzés and the importance marker are not: both are shelf position, not work done, and
+    // bumping would make toggling either one leave the item stuck at the top of a list that
+    // claims to be ordered by activity.
     const activity =
       patch.repos !== undefined ||
       patch.title !== undefined ||
@@ -256,13 +321,20 @@ export class TodoStore {
     return row ? toComment(row) : undefined;
   }
 
-  /** Adding a comment counts as activity, so the parent todo bubbles up the list. */
-  addComment(todoId: number, body: string): Comment | undefined {
+  /**
+   * Adding a comment counts as activity, so the parent todo bubbles up the list. `author` is not
+   * taken from the request body anywhere — each caller passes the side it *is*, so an agent cannot
+   * file a note as the human.
+   */
+  addComment(todoId: number, body: string, author: CommentAuthor): Comment | undefined {
     if (!this.getTodo(todoId)) return undefined;
     const now = Date.now();
     const result = this.db
-      .prepare('INSERT INTO comments (todo_id, body, created_at, updated_at) VALUES (?, ?, ?, ?)')
-      .run(todoId, body, now, now);
+      .prepare(
+        `INSERT INTO comments (todo_id, body, author, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(todoId, body, author, now, now);
     this.db.prepare('UPDATE todos SET updated_at = ? WHERE id = ?').run(now, todoId);
     return this.getComment(Number(result.lastInsertRowid));
   }
@@ -321,4 +393,131 @@ export class TodoStore {
     this.db.prepare('DELETE FROM todo_repos WHERE repo = ?').run(from);
     return affected;
   }
+
+  /** Every stored setting as a plain map. Absent keys simply do not appear. */
+  readSettings(): Record<string, string> {
+    const rows = this.db.prepare('SELECT key, value FROM settings').all() as Row[];
+    const settings: Record<string, string> = {};
+    for (const row of rows) settings[row.key as string] = row.value as string;
+    return settings;
+  }
+
+  /** Upsert one key; an empty value is stored as such, `deleteSetting` is how a key goes away. */
+  writeSetting(key: string, value: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO settings (key, value) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      )
+      .run(key, value);
+  }
+
+  deleteSetting(key: string): void {
+    this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+  }
+
+  getDevOpsLink(todoId: number): DevOpsLink | undefined {
+    const row = this.db.prepare('SELECT * FROM todo_devops WHERE todo_id = ?').get(todoId) as
+      | Row
+      | undefined;
+    return row ? toDevOpsLink(row) : undefined;
+  }
+
+  /** Which todo already claims this work item, if any — the 1:1 rule needs a name for the clash. */
+  findDevOpsLinkByWorkItem(workItemId: number): DevOpsLink | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM todo_devops WHERE work_item_id = ?')
+      .get(workItemId) as Row | undefined;
+    return row ? toDevOpsLink(row) : undefined;
+  }
+
+  /**
+   * Link a work item, replacing whatever this todo pointed at before. The push bookkeeping starts
+   * empty: linking is only a record, it never writes to DevOps, so nothing has been pushed yet.
+   *
+   * Deliberately does not bump `updated_at` — like kitűzés and fontos, this is a label on the item
+   * rather than work done on it, and bumping would shuffle the list for a piece of admin.
+   */
+  setDevOpsLink(
+    todoId: number,
+    item: { work_item_id: number; project: string; work_item_type: string; work_item_title: string; remote_state: string },
+  ): DevOpsLink | undefined {
+    if (!this.getTodo(todoId)) return undefined;
+    this.db
+      .prepare(
+        `INSERT INTO todo_devops
+           (todo_id, work_item_id, project, work_item_type, work_item_title, remote_state,
+            pushed_state, pushed_at, error, error_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, '', NULL, NULL, NULL, ?)
+         ON CONFLICT(todo_id) DO UPDATE SET
+           work_item_id = excluded.work_item_id,
+           project = excluded.project,
+           work_item_type = excluded.work_item_type,
+           work_item_title = excluded.work_item_title,
+           remote_state = excluded.remote_state,
+           pushed_state = '', pushed_at = NULL, error = NULL, error_at = NULL`,
+      )
+      .run(
+        todoId,
+        item.work_item_id,
+        item.project,
+        item.work_item_type,
+        item.work_item_title,
+        item.remote_state,
+        Date.now(),
+      );
+    return this.getDevOpsLink(todoId);
+  }
+
+  deleteDevOpsLink(todoId: number): boolean {
+    const result = this.db.prepare('DELETE FROM todo_devops WHERE todo_id = ?').run(todoId);
+    return Number(result.changes) > 0;
+  }
+
+  /** A push that landed: record what we wrote and refresh the cached fields from the response. */
+  recordDevOpsPush(
+    todoId: number,
+    pushed: { state: string; work_item_type: string; work_item_title: string; project: string },
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE todo_devops
+         SET pushed_state = ?, remote_state = ?, pushed_at = ?,
+             work_item_type = ?, work_item_title = ?, project = ?,
+             error = NULL, error_at = NULL
+         WHERE todo_id = ?`,
+      )
+      .run(
+        pushed.state,
+        pushed.state,
+        Date.now(),
+        pushed.work_item_type,
+        pushed.work_item_title,
+        pushed.project,
+        todoId,
+      );
+  }
+
+  /** A push that did not land. `pushed_state` is left alone: it still says what DevOps last got. */
+  recordDevOpsFailure(todoId: number, message: string): void {
+    this.db
+      .prepare('UPDATE todo_devops SET error = ?, error_at = ? WHERE todo_id = ?')
+      .run(message, Date.now(), todoId);
+  }
+}
+
+function toDevOpsLink(row: Row): DevOpsLink {
+  return {
+    todo_id: num(row.todo_id),
+    work_item_id: num(row.work_item_id),
+    project: row.project as string,
+    work_item_type: row.work_item_type as string,
+    work_item_title: row.work_item_title as string,
+    remote_state: row.remote_state as string,
+    pushed_state: row.pushed_state as string,
+    pushed_at: row.pushed_at === null ? null : num(row.pushed_at),
+    error: (row.error as string | null) ?? null,
+    error_at: row.error_at === null ? null : num(row.error_at),
+    created_at: num(row.created_at),
+  };
 }

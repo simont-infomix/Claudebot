@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { ALLOWED_HOSTS, DB_PATH, HOST, PORT, WEB_DIR } from './config.js';
 import { openDb } from './db.js';
 import { TodoStore } from './repo.js';
+import { TodoService } from './service.js';
 import { createMcpServer } from './mcp.js';
 import { createApiRouter } from './api.js';
 
@@ -23,7 +24,7 @@ function guardHost(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-export function createApp(store: TodoStore): express.Express {
+export function createApp(service: TodoService): express.Express {
   const app = express();
   app.use(express.json({ limit: '1mb' }));
 
@@ -31,7 +32,7 @@ export function createApp(store: TodoStore): express.Express {
 
   // Stateless MCP: a fresh server + transport per request, no session state to keep.
   app.post('/mcp', async (req, res) => {
-    const server = createMcpServer(store);
+    const server = createMcpServer(service);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
 
     res.on('close', () => {
@@ -67,7 +68,7 @@ export function createApp(store: TodoStore): express.Express {
     res.json({ ok: true, db: DB_PATH });
   });
 
-  app.use('/api', createApiRouter(store));
+  app.use('/api', createApiRouter(service));
 
   const webRoot = join(import.meta.dirname, WEB_DIR);
   const indexHtml = join(webRoot, 'index.html');
@@ -123,7 +124,7 @@ export interface StartedServer {
 export function startServer(options: StartServerOptions = {}): Promise<StartedServer> {
   const db = openDb();
   const store = new TodoStore(db);
-  const app = createApp(store);
+  const app = createApp(new TodoService(store));
 
   return new Promise((resolve, reject) => {
     let stopped = false;

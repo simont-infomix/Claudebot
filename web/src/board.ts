@@ -75,6 +75,9 @@ export function pinColor(id: number): string {
 /** Kitűzött notes wear the same brass pin, so they read as a set rather than as more colours. */
 export const PINNED_PIN = '#b8860b';
 
+/** Fontos notes wear a red flag — distinct from the pin, since importance and shelf position are separate. */
+export const IMPORTANT_FLAG = '#c0392b';
+
 const AGE_GRACE_DAYS = 14;
 const AGE_FULL_DAYS = 60;
 const AGE_MAX = 0.4;
