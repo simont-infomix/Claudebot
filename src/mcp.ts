@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   ACTIVE_STATUSES,
   STATUSES,
+  type Comment,
   type Status,
   type Ticket,
   type TodoListItem,
@@ -37,8 +38,11 @@ distinctive words rather than a whole sentence. Same output as list_todos: no co
 
 const GET_TICKET_DESCRIPTION = `Read one recorded item in full by its number: title, description,
 status, the repos it is filed under, and the whole comment thread. Each comment says where it came
-from: "user" is the human writing in the web UI, "agent" is a note left through update_ticket —
-possibly by you in an earlier session, so read those as your own progress notes, not as answers.
+from: "user" is the human writing in the web UI, "agent" is a note left through update_ticket,
+tagged with the repo the writing agent was working in. An agent note from your own repo is likely
+your own earlier progress note, not an answer; one from another repo is another project's agent
+talking on this item — e.g. a frontend agent stating what it needs from the backend. Agent notes
+written before the repo was recorded say so instead of naming one.
 
 Use it when the user points you at an item ("do #12", "what did I write on 7?"). This is a pull, not
 a channel: nothing new arrives here unless the user has been in the web UI, so do not poll it and do
@@ -51,7 +55,8 @@ it to in_progress.
 
 Use it once you have acted on an item the user pointed you at — say what you did, what you found, or
 where it stalled. The note joins the same thread the user writes in — marked as coming from the
-agent side, so the user can tell it from their own notes — and the item carries its outcome instead
+agent side and with the repo you pass, so the user and other projects' agents can tell who wrote
+it — and the item carries its outcome instead
 of just the original question.
 
 You cannot close an item. Closing means "I am satisfied with this", which is the user's judgement and
@@ -203,6 +208,15 @@ export function createMcpServer(service: TodoService): McpServer {
       description: UPDATE_TICKET_DESCRIPTION,
       inputSchema: {
         id: z.number().int().positive().describe('The item number, as in get_ticket.'),
+        repo: z
+          .string()
+          .trim()
+          .min(1)
+          .describe(
+            'Short name of the project YOU are working in: the basename of your repository ' +
+              'folder, spelled as in add_todo. Not necessarily the item\'s repo — a frontend agent ' +
+              'commenting on a backend item passes its own frontend repo name.',
+          ),
         comment: z
           .string()
           .trim()
@@ -223,7 +237,7 @@ export function createMcpServer(service: TodoService): McpServer {
       },
       annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
     },
-    async ({ id, comment, status }) => {
+    async ({ id, repo, comment, status }) => {
       if (comment === undefined && status === undefined) {
         return {
           isError: true,
@@ -234,7 +248,7 @@ export function createMcpServer(service: TodoService): McpServer {
         return { isError: true, content: [{ type: 'text' as const, text: `No todo with id #${id}.` }] };
       }
 
-      if (comment !== undefined) store.addComment(id, comment, 'agent');
+      if (comment !== undefined) store.addComment(id, comment, 'agent', repo.trim());
       // wait: false — if the item is linked to a work item, the push is started and forgotten.
       // An agent must never end up waiting on a network call, so the outcome lands on the item
       // for the human to see rather than in this response.
@@ -290,10 +304,18 @@ function formatTicket(ticket: Ticket): string {
 
   for (const comment of ticket.comments) {
     // Author first: without it an agent cannot tell the human's decision from its own old note.
-    lines.push('', `[${comment.author}] [${iso(comment.created_at)}]`, comment.body.trim());
+    lines.push('', `[${authorTag(comment)}] [${iso(comment.created_at)}]`, comment.body.trim());
   }
 
   return lines.join('\n');
+}
+
+/** `user`, or `agent` plus the repo it wrote from — the repo is what tells your note from another's. */
+function authorTag(comment: Comment): string {
+  if (comment.author !== 'agent') return comment.author;
+  return comment.agent_repo
+    ? `agent from repo ${comment.agent_repo}`
+    : 'agent, repo unknown (written before repos were recorded)';
 }
 
 function iso(epochMs: number): string {

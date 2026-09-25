@@ -73,14 +73,16 @@ mint a `list_todos`-é. Egy képernyőnyi tétel fölött ez a duplikátum-ellen
 
 **`get_ticket(id)`** — egy tétel teljes tartalma: cím, leírás, státusz, repók, időbélyegek és
 **minden bejegyzés**, mindegyiknél jelölve, honnan jött: `[user]` a te bejegyzésed a felületről,
-`[agent]` pedig az, amit egy agent írt `update_ticket`-tel — így az agent nem nézi válasznak
-a saját korábbi jegyzetét. Repofüggetlen, elég a sorszám. Akkor használja az agent, amikor ráirányítod
+`[agent from repo <név>]` pedig az, amit egy agent írt `update_ticket`-tel, annak a repónak a
+nevével, amiben az író agent dolgozott — így az agent nem nézi válasznak a saját korábbi jegyzetét,
+és látja, ha egy másik projekt agentje (pl. a frontend a backend tételére) írt. A funkció bevezetése
+előtti agent-bejegyzéseknél a repó ismeretlen, ezt a kimenet jelzi is. Repofüggetlen, elég a sorszám. Akkor használja az agent, amikor ráirányítod
 („csináld meg a 12-est", „mit írtam a 7-esre?"); magától nem érkezik ide semmi, ezért nincs értelme
 figyelnie.
 
-**`update_ticket(id, comment?, status?)`** — az agent visszajelzése: bejegyzést ír a tételhez, és/vagy
-`folyamatban`-ra állítja. A bejegyzés ugyanabba a szálba kerül, amibe te írsz, de az agent oldaláról
-megjelölve, hogy a felületen látszik, melyik a tied. **Lezárni nem tud** — az azt jelentené, hogy „ezt jóváhagytam", ami a te
+**`update_ticket(id, repo, comment?, status?)`** — az agent visszajelzése: bejegyzést ír a tételhez, és/vagy
+`folyamatban`-ra állítja. A `repo` az író agent *saját* projektje (nem feltétlenül a tételé). A bejegyzés
+ugyanabba a szálba kerül, amibe te írsz, de az agent oldaláról és a repójával megjelölve, hogy a felületen látszik, melyik a tied. **Lezárni nem tud** — az azt jelentené, hogy „ezt jóváhagytam", ami a te
 döntésed, és egy kattintás a felületen.
 
 ## Web UI

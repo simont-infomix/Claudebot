@@ -67,6 +67,8 @@ export type Comment = {
   body: string;
   /** Set server-side by the surface that wrote it; editing here does not change it. */
   author: CommentAuthor;
+  /** The writing agent's own project; null for `user`, and on agent notes predating it. */
+  agent_repo: string | null;
   created_at: number;
   updated_at: number;
 };

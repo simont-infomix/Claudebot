@@ -69,6 +69,12 @@ export type Comment = {
   body: string;
   /** Set by whichever surface wrote it; editing a note never changes who it came from. */
   author: CommentAuthor;
+  /**
+   * The project the writing agent works in, which need not be the todo's repo (a frontend agent
+   * answering on a backend item). Always null for `user`; null on an `agent` note means it predates
+   * this being recorded.
+   */
+  agent_repo: string | null;
   created_at: number;
   updated_at: number;
 };
@@ -141,6 +147,7 @@ function toComment(row: Row): Comment {
     todo_id: num(row.todo_id),
     body: row.body as string,
     author: row.author as CommentAuthor,
+    agent_repo: (row.agent_repo as string | null) ?? null,
     created_at: num(row.created_at),
     updated_at: num(row.updated_at),
   };
@@ -324,17 +331,22 @@ export class TodoStore {
   /**
    * Adding a comment counts as activity, so the parent todo bubbles up the list. `author` is not
    * taken from the request body anywhere — each caller passes the side it *is*, so an agent cannot
-   * file a note as the human.
+   * file a note as the human. `agentRepo` is only kept for `agent` notes — the human has no repo.
    */
-  addComment(todoId: number, body: string, author: CommentAuthor): Comment | undefined {
+  addComment(
+    todoId: number,
+    body: string,
+    author: CommentAuthor,
+    agentRepo: string | null = null,
+  ): Comment | undefined {
     if (!this.getTodo(todoId)) return undefined;
     const now = Date.now();
     const result = this.db
       .prepare(
-        `INSERT INTO comments (todo_id, body, author, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO comments (todo_id, body, author, agent_repo, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run(todoId, body, author, now, now);
+      .run(todoId, body, author, author === 'agent' ? agentRepo : null, now, now);
     this.db.prepare('UPDATE todos SET updated_at = ? WHERE id = ?').run(now, todoId);
     return this.getComment(Number(result.lastInsertRowid));
   }

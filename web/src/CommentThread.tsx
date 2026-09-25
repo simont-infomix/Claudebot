@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
@@ -172,6 +173,22 @@ export function CommentThread({ todoId, onSheet = false, onCountChange, onError 
                   <Typography variant="caption" sx={{ fontWeight: 600 }}>
                     {COMMENT_AUTHOR_LABELS[comment.author]}
                   </Typography>
+                  {/* Which project's agent wrote it: on a shared item the frontend's request and the
+                      backend's progress note are both "Claude". */}
+                  {comment.author === 'agent' &&
+                    (comment.agent_repo ? (
+                      <Chip
+                        label={comment.agent_repo}
+                        size="small"
+                        variant="outlined"
+                        color="info"
+                        sx={{ height: 18, fontSize: 11 }}
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                        (a funkció bevezetése előtti bejegyzés, repó ismeretlen)
+                      </Typography>
+                    ))}
                   <Tooltip title={formatAbsolute(comment.created_at)} placement="right">
                     <Typography variant="caption" color="text.secondary">
                       · {formatRelative(comment.created_at)}

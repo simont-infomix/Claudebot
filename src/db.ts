@@ -29,12 +29,15 @@ CREATE INDEX IF NOT EXISTS idx_todo_repos_repo ON todo_repos(repo);
 
 -- One thread per todo, written from both ends: the author column records which end a note came
 -- from, since the human reading the wall and the agent reading get_ticket must tell them apart.
+-- agent_repo is the project the writing agent works in (not the todo's repo — a frontend agent can
+-- answer on a backend item); always NULL for the human, and NULL on agent notes predating it.
 CREATE TABLE IF NOT EXISTS comments (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   todo_id    INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
   body       TEXT NOT NULL,
   author     TEXT NOT NULL DEFAULT 'user'
              CHECK (author IN ('user','agent')),
+  agent_repo TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -106,6 +109,12 @@ function migrate(db: DatabaseSync): void {
   // wrote something it did not would be the worse mistake of the two.
   if (!commentColumns.has('author')) {
     db.exec(`ALTER TABLE comments ADD COLUMN author TEXT NOT NULL DEFAULT 'user'`);
+  }
+
+  // The writing agent's repo came later again. Existing agent notes keep NULL, which the surfaces
+  // show as "written before this was recorded" rather than guessing the todo's own repo.
+  if (!commentColumns.has('agent_repo')) {
+    db.exec('ALTER TABLE comments ADD COLUMN agent_repo TEXT');
   }
 }
 

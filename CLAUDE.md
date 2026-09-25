@@ -76,6 +76,12 @@ file a note as the human. Editing a comment leaves the author alone. Migrated da
 for every pre-existing comment: nothing recorded the origin, and falsely crediting an agent would be
 the worse of the two mistakes.
 
+An agent comment also carries **`agent_repo`**: the project the *writing* agent works in, which is
+not necessarily the todo's repo — a frontend agent can comment on a backend item. `update_ticket`
+therefore takes a required `repo` (the caller's own), `get_ticket` prints `[agent from repo X]`, and
+`CommentThread` shows it as a chip. It is always NULL for `user`; NULL on an `agent` comment means
+the note predates the column, and both surfaces say so rather than guessing the todo's repo.
+
 `migrate()` in `db.ts` is the one place for schema evolution. Each step keys off what `PRAGMA
 table_info` actually reports rather than a version counter, so it is safe on every open — that is
 how the `repo` column removal and the later `pinned`/`important` additions all work. It reads a
