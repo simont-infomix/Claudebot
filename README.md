@@ -1,12 +1,10 @@
-# AI csapat – tervkivonat
+# AI csapat
 
-*Összeállítva: 2026-10-10 · Állapot: tervezés, a megvalósítás még nem kezdődött el*
+AI ügynökcsapat, amely a development department manager napi munkáját tehermenesíti: feldolgozza a leveleket, a Teams üzeneteket és a naptárat, válaszokat készít elő, az új igényeket pedig jóváhagyás után végigviszi a requirementektől az Azure DevOps jegyekig.
 
-## 1. Cél
+> **Állapot:** tervezés, a megvalósítás még nem kezdődött el.
 
-A development department manager napi munkájának tehermentesítése egy AI ügynökcsapattal. A csapat feldolgozza a leveleket, a Teams üzeneteket és a naptárat, válaszokat készít elő, az új igényeket pedig jóváhagyás után végigviszi a requirementektől az Azure DevOps jegyekig.
-
-## 2. Alapelvek
+## Alapelvek
 
 - **Ember a döntési pontokon:** levelet az ügynökök nem küldenek, csak piszkozatot írnak. Új igény csak jóváhagyás után indul.
 - **Egy ütemezett belépési pont:** csak az Asszisztens fut ütemezetten. Minden más igény szerint indul.
@@ -15,7 +13,7 @@ A development department manager napi munkájának tehermentesítése egy AI üg
 - **Hordozhatóság:** minden egy git repóban van, telepítő szkripttel.
 - **Futtatási környezet:** a céges laptop. A felhős (self-hosted) változatot a hardverlehetőségek áttekintése után elvetettük.
 
-## 3. A csapat
+## A csapat
 
 | Ügynök | Hogyan fut | Feladat |
 |---|---|---|
@@ -28,7 +26,7 @@ A development department manager napi munkájának tehermentesítése egy AI üg
 
 **Technikai korlát:** egy subagent nem indíthat további subagentet, csak egy szintű a hierarchia. Ezért a PM nem lehet az Asszisztens subagentje. A PM önálló folyamatként indul, a jóváhagyó oldal API hívására.
 
-## 4. Működés
+## Architektúra
 
 ```
  Claude desktop app
@@ -66,7 +64,7 @@ A development department manager napi munkájának tehermentesítése egy AI üg
 
 Cím, projekt, forrás (link a levélre vagy Teams üzenetre), összefoglaló, javasolt hatókör, prioritás, állapot, megjegyzések, előzmények.
 
-## 5. Tudástár (Karpathy-féle LLM wiki)
+## Tudástár (Karpathy-féle LLM wiki)
 
 Projektenként egy wiki:
 
@@ -83,7 +81,7 @@ wiki/<projekt>/
 - **lint:** ellentmondások, elavult és árva oldalak keresése, rendszeresen.
 - Mivel a Librariant az Asszisztens és a PM is indíthatja, írás előtt zárol (lock fájl), és minden változtatást git commitként rögzít.
 
-## 6. Repó szerkezete
+## Repó szerkezete
 
 ```
 ai-team/                  ← egyetlen git repó (később Azure DevOps Repos)
@@ -99,7 +97,7 @@ ai-team/                  ← egyetlen git repó (később Azure DevOps Repos)
   Dockerfile, docker-compose.yml   ← opcionális, egy későbbi szerverre költözéshez
 ```
 
-## 7. Költözés másik gépre
+## Telepítés / költözés másik gépre
 
 **Előfeltétel:** Node (a mostani gépen v24), git, Claude Code CLI és a Claude desktop app, bejelentkezve.
 
@@ -111,14 +109,14 @@ ai-team/                  ← egyetlen git repó (később Azure DevOps Repos)
 
 **Docker és WSL:** nem ezekre építünk. Az Asszisztens mindenképp a gazdagépen fut a desktop app csatlakozói miatt. A céges gépen mindkettőhöz rendszergazdai jog kell, a Docker Desktophoz pedig nagyobb cégnél licenc is. A Docker fájlok csak tartalékként kerülnek a repóba.
 
-## 8. Üzemeltetési szempontok
+## Üzemeltetési szempontok
 
 - A laptopnak ébren kell lennie és a desktop appnak nyitva. Az ébren tartás (keep-awake) bekapcsolható. Hogy egy alvás miatt kimaradt futás pótlódik-e, azt tesztelni kell.
 - A web szerver csak a `127.0.0.1` címen figyel. Az Asszisztens egy helyi tokennel hívja.
 - Minden ügynökfutást naplózni kell: mit csinált, milyen eszközöket hívott, mennyibe került.
 - Egyeztetni kell az IT-val, hogy a helyi szerver futtatása és a céges levelezés feldolgozása Claude-dal belefér-e a szabályzatba.
 
-## 9. Bevezetési sorrend
+## Bevezetési sorrend
 
 1. Repó váz, `CLAUDE.md`, szerepleírások.
 2. Jóváhagyó web app (API és felület).
@@ -126,12 +124,3 @@ ai-team/                  ← egyetlen git repó (később Azure DevOps Repos)
 4. PM a BA-val és az Architecttel.
 5. Scrum Master és az Azure DevOps bekötése.
 6. Telepítő szkript, költözési próba.
-
-## 10. Nyitott kérdések
-
-- [ ] A repó helye a gépen
-- [ ] Azure DevOps organization és project; belépés személyes tokennel (PAT) vagy böngészős bejelentkezéssel
-- [ ] A fő projektek listája a wikikhez
-- [ ] A Scrum Master önállósága: hozzon létre jegyeket `ai-proposed` címkével, vagy csak javasoljon
-- [ ] Az Asszisztens ütemezése (javaslat: hétköznap 7:00, 12:00, 16:00)
-- [ ] IT szabályzat egyeztetése
