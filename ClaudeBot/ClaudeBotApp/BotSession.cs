@@ -16,6 +16,7 @@ public enum LogKind
     Assistant,
     Info,
     Error,
+    User,
 }
 
 public readonly record struct LogLine(LogKind Kind, string Text);
@@ -92,6 +93,10 @@ public class BotSession
         {
             var json = JsonSerializer.Serialize(payload);
             _process.StandardInput.WriteLine(json);
+
+            // Csak a history-ba kerül be (a kiválasztott bot React oldala már optimistán
+            // megjelenítette a saját üzenetét) — nincs esemény-dobás, hogy ne duplikálódjon.
+            AccumulatedLog.Add(new LogLine(LogKind.User, text));
         }
         catch (Exception ex)
         {

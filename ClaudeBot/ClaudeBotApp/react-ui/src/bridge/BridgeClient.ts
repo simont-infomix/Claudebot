@@ -36,6 +36,10 @@ class BridgeClient {
   openTerminal(botId: string): void {
     this.send({ type: 'openTerminal', botId });
   }
+
+  sendPrompt(botId: string, text: string): void {
+    this.send({ type: 'sendPrompt', botId, text });
+  }
 }
 
 export const bridge = new BridgeClient();

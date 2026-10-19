@@ -6,7 +6,7 @@ export interface Bot {
   status: BotStatus;
 }
 
-export type LogKind = 'assistant' | 'info' | 'error';
+export type LogKind = 'assistant' | 'info' | 'error' | 'user';
 
 export interface LogLine {
   kind: LogKind;
@@ -17,7 +17,8 @@ export type HostRequest =
   | { type: 'getBots' }
   | { type: 'createBot'; name: string }
   | { type: 'selectBot'; botId: string }
-  | { type: 'openTerminal'; botId: string };
+  | { type: 'openTerminal'; botId: string }
+  | { type: 'sendPrompt'; botId: string; text: string };
 
 export type HostEvent =
   | { type: 'botList'; bots: Bot[] }

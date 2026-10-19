@@ -2,7 +2,7 @@
 id: ui-design-guideline
 title: UI design szabályzat
 type: ui-design-guideline
-version: 0.7.1
+version: 0.8.0
 created: 2026-10-15
 updated: 2026-10-16
 references:
@@ -24,7 +24,7 @@ prémium, éteri hangulat, a kontraszt és olvashatóság elsőbbségével a dr�
 | Felület (glass) | `rgba(255,255,255,0.06)` | Avatar-gombok, log-keret, kártyák — frosted glass panel `blur(12px)`-vel. |
 | Felület hover | `rgba(255,255,255,0.08)` | Glass felületek hover-állapota. |
 | Elsődleges szöveg | `rgba(237,242,255,1)` | Avatar-feliratok, log-szöveg, gombfeliratok. |
-| Másodlagos szöveg | `rgba(139,155,187,1)` | Placeholder-szöveg (pl. "Logok helye"), segédszövegek. |
+| Másodlagos szöveg | `rgba(139,155,187,1)` | Placeholder-szöveg (pl. "Még nincs üzenet"), segédszövegek. |
 | Akcentszín (Arctic Teal) | `rgba(0,232,200,1)` | Kiválasztott bot avatar-keretje + glow, fókuszjelzés, elsődleges interaktív kiemelés. |
 | Hiba/figyelmeztetés | `rgba(255,83,112,1)` | Validációs hibaüzenetek, rendszerhiba log-sorok, hibás bot-állapot jelölő. |
 | Siker/fut állapot (Boreal Green) | `rgba(61,255,154,1)` | "Fut" állapot-jelölő pötty, glow-pulse animációval. |
@@ -79,12 +79,25 @@ A Content a rendelkezésre álló teljes maradék szélességet kapja (`flex: 1`
 | Mező-típus | Vizuális konvenció |
 |---|---|
 | Bot-állapot (fut / leállt / hiba) | 10px átmérőjű pötty az avatar jobb alsó sarkában: `rgba(61,255,154,1)` (Boreal Green) = fut, enyhe glow-pulse animációval (2s ease-in-out infinite, opacity 0.4→0.9); `rgba(139,155,187,1)` = leállt; `rgba(255,83,112,1)` = hiba, glow nélkül, hogy megkülönböztethető legyen a futó állapottól. |
-| Log-sor típusa (assistant válasz / rendszerinfo / hiba-stderr) | Assistant válasz: `rgba(237,242,255,1)` alapszín, prefix nélkül. Rendszerinfo (`[info]`): `rgba(139,155,187,1)`, dőlt. Hiba/stderr (`[hiba]`/`[stderr]`): `rgba(255,83,112,1)`, a sor elején egy ⚠ jellel. |
+| Chat-üzenet típusa (user / assistant válasz / rendszerinfo / hiba-stderr) | ld. Chat-buborékok alszekció — ez négy, vizuálisan megkülönböztetett típus, nem csak színezett szövegsor. |
+
+**Chat-buborékok:** a beszélgetés sor-alapú, minden sor egy `chat-row` (igazítás: user → jobbra, assistant/info/error → balra kivéve info/error, ami középre), benne egy `chat-bubble` (max-width 70%, ≥1400px ablaknál abszolút felső korlát 640px):
+
+| Típus | Igazítás | Háttér | Szöveg/keret |
+|---|---|---|---|
+| `user` (a felhasználó üzenete) | Jobbra | `linear-gradient(135deg, rgba(0,232,200,0.18), rgba(75,159,255,0.18))` | `rgba(237,242,255,1)` szöveg, border `rgba(0,232,200,0.30)` |
+| `assistant` (a bot válasza) | Balra | Glass Base (`rgba(255,255,255,0.06)`) | `rgba(237,242,255,1)` szöveg, border `rgba(255,255,255,0.11)` |
+| `info` (rendszerjegyzet, pl. "A claude.exe folyamat leállt") | Középre | transparent, border nélkül | `rgba(139,155,187,1)`, dőlt, 13px — nem teljes buborék, csak egy diszkrét sor |
+| `error` (hiba/stderr) | Középre | `rgba(255,83,112,0.10)` | `rgba(255,83,112,1)`, border `rgba(255,83,112,0.30)`, a sor elején ⚠ jel |
+
+Mind a négy típus `--font-mono`-t használ (a log-szerű, fejlesztői jellegű tartalom miatt), `--radius-lg` (14px) lekerekítéssel.
 
 **Fix szekciók:**
 - *Sidebar* — `rgba(13,18,32,1)` háttér, `backdrop-filter: blur(16px)`; mindig látható, a "+" gomb mindig a lista alján rögzített (Ghost-variáns, ld. Gombok).
-- *LogView* — a log-keret Glass Base szint (`rgba(255,255,255,0.04)`, 1px `rgba(255,255,255,0.07)` keret, blur nélkül, hogy a hosszú szöveg ne veszítsen kontrasztot); a jobb felső sarokban a beállítások-ikon, jobb alul az "Open" gomb (Secondary-variáns) mindig fix pozícióban marad átméretezéskor; automatikus görgetés az utolsó sorra, kivéve ha a felhasználó kézzel feljebb görgetett.
-- *Üres állapot* — a "Logok helye" felirat középre igazítva, `rgba(139,155,187,1)` színnel.
+- *ChatView* — a chat-keret Glass Base szint (`rgba(255,255,255,0.04)`, 1px `rgba(255,255,255,0.07)` keret, blur nélkül, hogy a hosszú szöveg ne veszítsen kontrasztot); a tetején jobbra igazítva az "Open" gomb (Secondary-variáns) és a beállítások-ikon; alul fix pozícióban a beviteli sáv (ld. Beviteli sáv); automatikus görgetés az utolsó üzenetre, kivéve ha a felhasználó kézzel feljebb görgetett.
+- *Üres állapot* — a "Még nincs üzenet" felirat középre igazítva, `rgba(139,155,187,1)` színnel.
+
+**Beviteli sáv (önálló `ChatInput` komponens, bővíthetőség miatt elkülönítve):** Glass Base keret (`rgba(255,255,255,0.04)`, 1px `rgba(255,255,255,0.08)` keret, `--radius-lg`), benne balra egy auto-növő `textarea` (max-magasság 120px, placeholder `rgba(74,86,112,1)`), jobbra egy 40×40px küldés-gomb (Primary Button Pattern: teal→kék gradiens + glow, "→" glyph). `Enter` küld, `Shift+Enter` új sort — ez a konvenció minden jövőbeli, a beviteli sávba kerülő funkcióra is érvényes marad.
 
 **Gombok (Aurora Button Pattern):**
 
@@ -108,7 +121,7 @@ Magasság: 40px standard; padding `--sp-4` vízszintes, `--sp-2` függőleges; l
 ## Hibakezelés
 
 - **Beviteli/validációs hiba** (pl. üres vagy érvénytelen bot-név, névütközés): inline hibaszöveg a mező alatt, `rgba(255,83,112,1)` színnel; az input mező kerete `rgba(255,83,112,0.60)`-ra vált, belső glow `0 0 0 3px rgba(255,83,112,0.15)` — nem natív alert/MessageBox, a dialógus nyitva marad, a mező fókuszban.
-- **Rendszerszintű hiba** (pl. a `claude.exe` indítása sikertelen): kiemelt, `rgba(255,83,112,1)` színű sor a LogView-ban, és az érintett bot avatarjának állapot-pöttye hiba-színre vált (glow nélkül, hogy megkülönböztethető legyen a "fut" pulzáló glow-tól).
+- **Rendszerszintű hiba** (pl. a `claude.exe` indítása sikertelen): kiemelt, `rgba(255,83,112,1)` színű `error`-buborék a ChatView-ban, és az érintett bot avatarjának állapot-pöttye hiba-színre vált (glow nélkül, hogy megkülönböztethető legyen a "fut" pulzáló glow-tól).
 - **Üres állapot:** ld. Komponens-konvenciók — vizuálisan egyértelműen megkülönböztetendő a hibaállapottól (semleges szürkés-kék, nem piros).
 
 ## Visszajelzés (Feedback)

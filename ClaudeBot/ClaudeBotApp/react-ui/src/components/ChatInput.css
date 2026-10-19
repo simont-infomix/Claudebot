@@ -1,0 +1,76 @@
+.chat-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  /* a gomb (40px) + bottom-offsetje (8px) + egy kis szimmetrikus felső rés férjen el 1 sornál is —
+     a textarea sosem skálázódik erre, csak a konténerben középre igazodik (ld. align-items) */
+  min-height: 56px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.chat-input__field {
+  flex: 1;
+  resize: none;
+  /* max. 5 sor: 14px * 1.5 sormagasság * 5 = 105px tartalom + 2*8px (--sp-2) padding */
+  max-height: 121px;
+  overflow-y: auto;
+  /* jobb padding: a gomb jobb-offsetje (14px) + szélessége (40px) + 4px rés a gomb és a szöveg közt */
+  padding: var(--sp-2) 58px var(--sp-2) var(--sp-3);
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.chat-input__field:focus {
+  outline: none;
+}
+
+.chat-input__field::placeholder {
+  color: var(--text-muted);
+}
+
+.chat-input__send {
+  position: absolute;
+  /* scrollbar szélesség (10px) + 4px kívánt rés = 14px a jobb szélétől */
+  right: 14px;
+  bottom: var(--sp-2);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(0, 232, 200, 1), rgba(75, 159, 255, 1));
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  box-shadow:
+    0 0 0 1px rgba(0, 232, 200, 0.3),
+    0 0 16px rgba(0, 232, 200, 0.2);
+  transition: filter var(--duration-micro) ease;
+}
+
+.chat-input__send:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.chat-input__send:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+
+.chat-input__send:disabled {
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
+}
+
+.chat-input__send-icon {
+  width: 18px;
+  height: 18px;
+}

@@ -47,6 +47,11 @@ public class BotSessionManager
         return (true, null);
     }
 
+    public void SendPrompt(string name, string text)
+    {
+        FindBot(name)?.SendPrompt(text);
+    }
+
     public void OpenTerminal(string name)
     {
         var bot = FindBot(name);

@@ -2,19 +2,20 @@
 id: architecture-c3-react-ui
 title: Architektúra diagram — C3 (Component) – React UI
 type: architecture-c3
-version: 0.1.0
+version: 0.2.0
 created: 2026-10-15
-updated: 2026-10-15
+updated: 2026-10-19
 references:
   - architecture-c2-claude-bot
 ---
 
 ## Leírás
 
-A React UI három belső komponensből áll: a bal oldali bot-választó sáv, a kiválasztott bot élő
-logját és a hozzá tartozó műveleteket (terminál nyitása, beállítások-gomb) megjelenítő nézet, és a
-WebView2 JS API-ját egyszerű függvényekre csomagoló híd-kliens. A beállítások nézet tartalma még
-nincs kidolgozva — jelenleg csak egy funkció nélküli gomb jelzi a helyét.
+A React UI négy belső komponensből áll: a bal oldali bot-választó sáv, a kiválasztott bot
+beszélgetését buborékokban megjelenítő chat-nézet, egy önálló, bővíthető beviteli komponens (a
+chat-nézeten belül), és a WebView2 JS API-ját egyszerű függvényekre csomagoló híd-kliens. A
+beállítások nézet tartalma még nincs kidolgozva — jelenleg csak egy funkció nélküli gomb jelzi a
+helyét.
 
 ## Diagram
 
@@ -26,16 +27,19 @@ C4Component
 
     Container_Boundary(reactUi, "React UI") {
         Component(sidebar, "Sidebar", "React komponens", "Bot-avatarok listája és az új bot létrehozása (+) gomb")
-        Component(logView, "LogView", "React komponens", "A kiválasztott bot élő logja, a terminál-megnyitás és a (még inaktív) beállítások-gomb")
+        Component(chatView, "ChatView", "React komponens", "A kiválasztott bot beszélgetése buborékokban, a terminál-megnyitás és a (még inaktív) beállítások-gomb")
+        Component(chatInput, "ChatInput", "React komponens", "Önálló beviteli sáv: szövegmező + küldés-gomb, Enter-rel is küldhető")
         Component(bridgeClient, "BridgeClient", "TypeScript wrapper a window.chrome.webview köré", "Tipizált függvényekre csomagolja a JS bridge üzenetváltást")
     }
 
     Rel(sidebar, bridgeClient, "Új bot létrehozása / bot kiválasztása")
-    Rel(logView, bridgeClient, "Terminál megnyitása a kiválasztott bothoz")
+    Rel(chatView, bridgeClient, "Terminál megnyitása a kiválasztott bothoz")
+    Rel(chatInput, chatView, "Elküldött szöveg (onSend callback)")
+    Rel(chatView, bridgeClient, "Prompt küldése a kiválasztott botnak")
     Rel(bridgeClient, winformsHost, "postMessage (parancsok)")
-    Rel(winformsHost, bridgeClient, "PostWebMessageAsJson (bot-lista, log-események)")
+    Rel(winformsHost, bridgeClient, "PostWebMessageAsJson (bot-lista, chat-események)")
     Rel(bridgeClient, sidebar, "Bot-lista frissítése")
-    Rel(bridgeClient, logView, "Új log-sorok push-olása")
+    Rel(bridgeClient, chatView, "Új chat-üzenetek push-olása")
 ```
 
 ## Elemek
@@ -43,5 +47,6 @@ C4Component
 | Elem | Típus | Leírás |
 |---|---|---|
 | Sidebar | Component | A bal oldali sáv: egy kör alakú avatar-gomb botonként, legalul a "+" gomb új bot létrehozásához. |
-| LogView | Component | A kiválasztott bot élő log-területe, a terminál-megnyitás ("Open") és a jelenleg funkció nélküli beállítások-gomb. |
-| BridgeClient | Component | A `window.chrome.webview.postMessage`/`addEventListener('message')` API-t tipizált, Promise-alapú függvényekre csomagoló kliensréteg; ezen keresztül éri el mind a Sidebar, mind a LogView a WinForms Host-ot. |
+| ChatView | Component | A kiválasztott bot beszélgetése: a user üzenetei jobbra, a bot válaszai balra igazított buborékokban; a terminál-megnyitás ("Open") és a jelenleg funkció nélküli beállítások-gomb a tetején; a ChatInput-ot ágyazza be alulra. |
+| ChatInput | Component | Önálló komponens (nem a ChatView JSX-ébe írt beviteli mező), hogy a jövőbeli bővítések (pl. csatolmányok, parancsok) ne a ChatView-t érintsék. Szövegmező + küldés-gomb; `Enter` küld, `Shift+Enter` új sort kezd. |
+| BridgeClient | Component | A `window.chrome.webview.postMessage`/`addEventListener('message')` API-t tipizált, Promise-alapú függvényekre csomagoló kliensréteg; ezen keresztül éri el mind a Sidebar, mind a ChatView a WinForms Host-ot. |

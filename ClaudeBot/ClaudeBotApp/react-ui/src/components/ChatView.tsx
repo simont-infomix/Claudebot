@@ -1,14 +1,16 @@
 import { useEffect, useRef } from 'react';
 import type { Bot, LogLine } from '../types';
-import './LogView.css';
+import { ChatInput } from './ChatInput';
+import './ChatView.css';
 
 interface Props {
   bot: Bot | null;
   logs: LogLine[];
   onOpenTerminal: () => void;
+  onSendPrompt: (text: string) => void;
 }
 
-export function LogView({ bot, logs, onOpenTerminal }: Props) {
+export function ChatView({ bot, logs, onOpenTerminal, onSendPrompt }: Props) {
   const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -18,29 +20,28 @@ export function LogView({ bot, logs, onOpenTerminal }: Props) {
   return (
     <div className="content">
       <div className="top-bar">
+        <button type="button" className="btn-open" onClick={onOpenTerminal} disabled={!bot}>
+          Open
+        </button>
         <button type="button" className="icon-button" aria-label="Beállítások megnyitása">
           ⚙
         </button>
       </div>
-      <div className="log-frame">
+      <div className="chat-frame">
         {logs.length === 0 ? (
-          <div className="log-placeholder">Logok helye</div>
+          <div className="chat-placeholder">Még nincs üzenet</div>
         ) : (
-          <div className="log-text">
+          <div className="chat-messages">
             {logs.map((line, i) => (
-              <div key={i} className={`log-line log-line--${line.kind}`}>
-                {line.text}
+              <div key={i} className={`chat-row chat-row--${line.kind}`}>
+                <div className={`chat-bubble chat-bubble--${line.kind}`}>{line.text}</div>
               </div>
             ))}
             <div ref={logEndRef} />
           </div>
         )}
       </div>
-      <div className="bottom-bar">
-        <button type="button" className="btn-open" onClick={onOpenTerminal} disabled={!bot}>
-          Open
-        </button>
-      </div>
+      <ChatInput disabled={!bot} onSend={onSendPrompt} />
     </div>
   );
 }

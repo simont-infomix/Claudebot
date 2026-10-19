@@ -67,6 +67,14 @@ public class WebViewBridge
                         }
                     }
                     break;
+
+                case "sendPrompt":
+                    if (root.TryGetProperty("botId", out var promptBotIdProp) &&
+                        root.TryGetProperty("text", out var promptTextProp))
+                    {
+                        _manager.SendPrompt(promptBotIdProp.GetString() ?? "", promptTextProp.GetString() ?? "");
+                    }
+                    break;
             }
         }
         catch (JsonException)
@@ -128,6 +136,7 @@ public class WebViewBridge
     {
         LogKind.Error => "error",
         LogKind.Info => "info",
+        LogKind.User => "user",
         _ => "assistant",
     };
 

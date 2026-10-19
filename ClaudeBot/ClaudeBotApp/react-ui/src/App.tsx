@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { bridge } from './bridge/BridgeClient';
 import type { Bot, LogLine } from './types';
 import { Sidebar } from './components/Sidebar';
-import { LogView } from './components/LogView';
+import { ChatView } from './components/ChatView';
 import { NewBotDialog } from './components/NewBotDialog';
 import './App.css';
 
@@ -61,6 +61,12 @@ export default function App() {
     bridge.createBot(name);
   }
 
+  function handleSendPrompt(text: string) {
+    if (!selectedBotId) return;
+    setLogs((prev) => [...prev, { kind: 'user', text }]);
+    bridge.sendPrompt(selectedBotId, text);
+  }
+
   const selectedBot = bots.find((b) => b.id === selectedBotId) ?? null;
 
   return (
@@ -74,10 +80,11 @@ export default function App() {
           setDialogOpen(true);
         }}
       />
-      <LogView
+      <ChatView
         bot={selectedBot}
         logs={logs}
         onOpenTerminal={() => selectedBot && bridge.openTerminal(selectedBot.id)}
+        onSendPrompt={handleSendPrompt}
       />
       {dialogOpen && (
         <NewBotDialog
