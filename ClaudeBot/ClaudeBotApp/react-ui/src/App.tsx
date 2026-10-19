@@ -82,13 +82,11 @@ export default function App() {
           setDialogError(null);
           setDialogOpen(true);
         }}
+        onOpenSettings={() => {}}
+        onOpenWorkspaceFolder={(botId) => bridge.openWorkspaceFolder(botId)}
+        onOpenTerminal={(botId) => bridge.openTerminal(botId)}
       />
-      <ChatView
-        bot={selectedBot}
-        logs={logs}
-        onOpenTerminal={() => selectedBot && bridge.openTerminal(selectedBot.id)}
-        onSendPrompt={handleSendPrompt}
-      />
+      <ChatView bot={selectedBot} logs={logs} onSendPrompt={handleSendPrompt} />
       {dialogOpen && (
         <NewBotDialog
           error={dialogError}

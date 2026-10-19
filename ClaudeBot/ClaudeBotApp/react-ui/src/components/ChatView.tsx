@@ -6,11 +6,10 @@ import './ChatView.css';
 interface Props {
   bot: Bot | null;
   logs: LogLine[];
-  onOpenTerminal: () => void;
   onSendPrompt: (text: string, attachments: EncodedAttachment[]) => void;
 }
 
-export function ChatView({ bot, logs, onOpenTerminal, onSendPrompt }: Props) {
+export function ChatView({ bot, logs, onSendPrompt }: Props) {
   const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -19,14 +18,6 @@ export function ChatView({ bot, logs, onOpenTerminal, onSendPrompt }: Props) {
 
   return (
     <div className="content">
-      <div className="top-bar">
-        <button type="button" className="btn-open" onClick={onOpenTerminal} disabled={!bot}>
-          Open
-        </button>
-        <button type="button" className="icon-button" aria-label="Beállítások megnyitása">
-          ⚙
-        </button>
-      </div>
       <div className="chat-frame">
         {logs.length === 0 ? (
           <div className="chat-placeholder">Még nincs üzenet</div>

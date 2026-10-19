@@ -53,11 +53,11 @@
 }
 
 .avatar--add {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 300;
   color: var(--accent-primary);
   background: transparent;
-  border: 1px solid var(--accent-primary);
+  border: none;
 }
 
 .avatar--add:hover {

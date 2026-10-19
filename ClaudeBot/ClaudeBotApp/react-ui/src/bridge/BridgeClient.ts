@@ -37,6 +37,10 @@ class BridgeClient {
     this.send({ type: 'openTerminal', botId });
   }
 
+  openWorkspaceFolder(botId: string): void {
+    this.send({ type: 'openWorkspaceFolder', botId });
+  }
+
   sendPrompt(botId: string, text: string, attachments: EncodedAttachment[] = []): void {
     this.send({ type: 'sendPrompt', botId, text, attachments });
   }

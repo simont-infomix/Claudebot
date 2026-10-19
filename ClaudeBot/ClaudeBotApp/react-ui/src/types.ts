@@ -23,6 +23,7 @@ export type HostRequest =
   | { type: 'createBot'; name: string }
   | { type: 'selectBot'; botId: string }
   | { type: 'openTerminal'; botId: string }
+  | { type: 'openWorkspaceFolder'; botId: string }
   | { type: 'sendPrompt'; botId: string; text: string; attachments: EncodedAttachment[] };
 
 export type HostEvent =

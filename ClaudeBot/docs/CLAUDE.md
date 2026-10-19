@@ -57,7 +57,7 @@ konténer/service/képernyő nevéből, pl. `TodoStore` → `todo-store`).
 
 | Típus (`type`) | Példány | Elérési út |
 |---|---|---|
-| `use-case` | több | `docs/use-cases/<id>.md` |
+| `use-case` | több | `docs/use-cases/<id>-<slug>.md` (a slug a use case nevéből, ASCII, kisbetűs, kötőjeles) |
 | `architecture-c1` | egy | `docs/architecture-c1.md` |
 | `architecture-c2` | több, rendszerenként | `docs/architecture-c2/<system-slug>.md` |
 | `architecture-c3` | több, konténerenként | `docs/architecture-c3/<container-slug>.md` |

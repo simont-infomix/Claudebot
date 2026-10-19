@@ -88,6 +88,21 @@ public class BotSessionManager
         Process.Start(psi);
     }
 
+    public void OpenWorkspaceFolder(string name)
+    {
+        var bot = FindBot(name);
+        if (bot == null)
+            return;
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"\"{bot.FolderPath}\"",
+            UseShellExecute = true,
+        };
+        Process.Start(psi);
+    }
+
     public void StopAll()
     {
         foreach (var bot in _bots)

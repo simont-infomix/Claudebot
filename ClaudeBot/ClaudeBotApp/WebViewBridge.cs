@@ -68,6 +68,20 @@ public class WebViewBridge
                     }
                     break;
 
+                case "openWorkspaceFolder":
+                    if (root.TryGetProperty("botId", out var folderIdProp))
+                    {
+                        try
+                        {
+                            _manager.OpenWorkspaceFolder(folderIdProp.GetString() ?? "");
+                        }
+                        catch (Exception ex)
+                        {
+                            PostEvent(new { type = "error", message = $"A munka mappa megnyitása sikertelen: {ex.Message}" });
+                        }
+                    }
+                    break;
+
                 case "sendPrompt":
                     if (root.TryGetProperty("botId", out var promptBotIdProp) &&
                         root.TryGetProperty("text", out var promptTextProp))
