@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+  </ItemGroup>
+
+  <!-- A react-ui/ a .NET SDK implicit fájl-globbingjától független, saját (npm-mel kezelt) forrásfa —
+       ki kell zárni, különben a node_modules/dist tartalma None/Compile item-ként a projektbe kerülne. -->
+  <ItemGroup>
+    <Compile Remove="react-ui/**" />
+    <EmbeddedResource Remove="react-ui/**" />
+    <None Remove="react-ui/**" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <ReactUiDir>$(MSBuildProjectDirectory)\react-ui</ReactUiDir>
+  </PropertyGroup>
+
+  <Target Name="BuildReactUi" BeforeTargets="Build" Condition="Exists('$(ReactUiDir)\package.json')">
+    <Exec Command="npm install" WorkingDirectory="$(ReactUiDir)" Condition="!Exists('$(ReactUiDir)\node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="$(ReactUiDir)" />
+  </Target>
+
+  <Target Name="CopyReactUiOutput" AfterTargets="Build" Condition="Exists('$(ReactUiDir)\dist')">
+    <ItemGroup>
+      <ReactUiFiles Include="$(ReactUiDir)\dist\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ReactUiFiles)" DestinationFolder="$(OutDir)webui\%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

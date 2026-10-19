@@ -1,0 +1,9 @@
+.app {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: radial-gradient(ellipse 80% 60% at 20% 20%, rgba(0, 232, 200, 0.1) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 85% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 60%),
+    var(--bg-base);
+}

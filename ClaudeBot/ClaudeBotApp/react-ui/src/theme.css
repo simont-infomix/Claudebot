@@ -1,0 +1,80 @@
+:root {
+  /* Aurora — háttér / canvas */
+  --bg-base: rgba(8, 12, 20, 1);
+  --bg-mid: rgba(13, 18, 32, 1);
+  --bg-surface: rgba(255, 255, 255, 0.06);
+  --bg-surface-hover: rgba(255, 255, 255, 0.08);
+  --bg-overlay: rgba(8, 12, 20, 0.72);
+
+  /* Aurora — szemantikus színek */
+  --text-primary: rgba(237, 242, 255, 1);
+  --text-secondary: rgba(139, 155, 187, 1);
+  --text-muted: rgba(74, 86, 112, 1);
+  --text-inverse: rgba(8, 12, 20, 1);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-active: rgba(0, 232, 200, 0.4);
+  --accent-primary: rgba(0, 232, 200, 1);
+  --accent-glow: rgba(0, 232, 200, 0.25);
+  --danger: rgba(255, 83, 112, 1);
+  --warning: rgba(255, 184, 106, 1);
+  --success: rgba(61, 255, 154, 1);
+
+  /* Aurora — térköz-skála (4px grid) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-24: 96px;
+
+  /* Aurora — lekerekítés */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Aurora — tipográfia */
+  --font-ui: 'Inter', 'Manrope', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Aurora — mozgás */
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-micro: 150ms;
+  --duration-standard: 220ms;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  background: var(--bg-base);
+}
+
+button {
+  font-family: var(--font-ui);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,90 @@
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog {
+  width: 360px;
+  background: rgba(13, 18, 32, 0.88);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-xl);
+  padding: var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.dialog label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.dialog input {
+  padding: var(--sp-3);
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+}
+
+.dialog input:focus {
+  outline: none;
+  border-color: rgba(0, 232, 200, 0.5);
+  box-shadow: 0 0 0 3px rgba(0, 232, 200, 0.12);
+}
+
+.dialog input.error {
+  border-color: rgba(255, 83, 112, 0.6);
+  box-shadow: 0 0 0 3px rgba(255, 83, 112, 0.15);
+}
+
+.dialog-error {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
+.dialog-actions button {
+  height: 40px;
+  padding: var(--sp-2) var(--sp-4);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  transition: filter var(--duration-micro) ease;
+}
+
+.dialog-actions button[type='submit'] {
+  background: linear-gradient(135deg, rgba(0, 232, 200, 1), rgba(75, 159, 255, 1));
+  color: var(--text-inverse);
+  border: none;
+  box-shadow:
+    0 0 0 1px rgba(0, 232, 200, 0.3),
+    0 0 16px rgba(0, 232, 200, 0.2);
+}
+
+.dialog-actions button[type='button'] {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+}
+
+.dialog-actions button:hover {
+  filter: brightness(1.1);
+}
+
+.dialog-actions button:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
+}

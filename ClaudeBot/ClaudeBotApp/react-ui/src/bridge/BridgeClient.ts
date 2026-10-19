@@ -1,0 +1,41 @@
+import type { HostEvent } from '../types';
+
+type Listener = (event: HostEvent) => void;
+
+class BridgeClient {
+  private listeners = new Set<Listener>();
+
+  constructor() {
+    window.chrome?.webview?.addEventListener('message', (e) => {
+      const data = e.data as HostEvent;
+      this.listeners.forEach((listener) => listener(data));
+    });
+  }
+
+  on(listener: Listener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private send(message: unknown): void {
+    window.chrome?.webview?.postMessage(message);
+  }
+
+  getBots(): void {
+    this.send({ type: 'getBots' });
+  }
+
+  createBot(name: string): void {
+    this.send({ type: 'createBot', name });
+  }
+
+  selectBot(botId: string): void {
+    this.send({ type: 'selectBot', botId });
+  }
+
+  openTerminal(botId: string): void {
+    this.send({ type: 'openTerminal', botId });
+  }
+}
+
+export const bridge = new BridgeClient();
