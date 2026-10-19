@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { Bot, LogLine } from '../types';
+import type { Bot, EncodedAttachment, LogLine } from '../types';
 import { ChatInput } from './ChatInput';
 import './ChatView.css';
 
@@ -7,7 +7,7 @@ interface Props {
   bot: Bot | null;
   logs: LogLine[];
   onOpenTerminal: () => void;
-  onSendPrompt: (text: string) => void;
+  onSendPrompt: (text: string, attachments: EncodedAttachment[]) => void;
 }
 
 export function ChatView({ bot, logs, onOpenTerminal, onSendPrompt }: Props) {

@@ -1,3 +1,17 @@
+.chat-input-area {
+  display: flex;
+  flex-direction: column;
+  /* csak akkor hat, ha a .chat-attachments sáv is jelen van a DOM-ban (van legalább 1 csatolmány) —
+     ha nincs, a flex-konténernek 1 gyereke van, a gap nem termel extra térközt */
+  gap: var(--sp-2);
+}
+
+.chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
 .chat-input {
   position: relative;
   display: flex;

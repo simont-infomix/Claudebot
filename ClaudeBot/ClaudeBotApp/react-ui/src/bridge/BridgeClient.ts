@@ -1,4 +1,4 @@
-import type { HostEvent } from '../types';
+import type { EncodedAttachment, HostEvent } from '../types';
 
 type Listener = (event: HostEvent) => void;
 
@@ -37,8 +37,8 @@ class BridgeClient {
     this.send({ type: 'openTerminal', botId });
   }
 
-  sendPrompt(botId: string, text: string): void {
-    this.send({ type: 'sendPrompt', botId, text });
+  sendPrompt(botId: string, text: string, attachments: EncodedAttachment[] = []): void {
+    this.send({ type: 'sendPrompt', botId, text, attachments });
   }
 }
 

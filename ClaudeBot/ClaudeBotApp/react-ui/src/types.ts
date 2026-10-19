@@ -13,12 +13,17 @@ export interface LogLine {
   text: string;
 }
 
+export interface EncodedAttachment {
+  name: string;
+  dataBase64: string;
+}
+
 export type HostRequest =
   | { type: 'getBots' }
   | { type: 'createBot'; name: string }
   | { type: 'selectBot'; botId: string }
   | { type: 'openTerminal'; botId: string }
-  | { type: 'sendPrompt'; botId: string; text: string };
+  | { type: 'sendPrompt'; botId: string; text: string; attachments: EncodedAttachment[] };
 
 export type HostEvent =
   | { type: 'botList'; bots: Bot[] }

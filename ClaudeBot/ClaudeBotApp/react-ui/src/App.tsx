@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { bridge } from './bridge/BridgeClient';
-import type { Bot, LogLine } from './types';
+import type { Bot, EncodedAttachment, LogLine } from './types';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { NewBotDialog } from './components/NewBotDialog';
@@ -61,10 +61,13 @@ export default function App() {
     bridge.createBot(name);
   }
 
-  function handleSendPrompt(text: string) {
+  function handleSendPrompt(text: string, attachments: EncodedAttachment[]) {
     if (!selectedBotId) return;
-    setLogs((prev) => [...prev, { kind: 'user', text }]);
-    bridge.sendPrompt(selectedBotId, text);
+    const attachmentNote =
+      attachments.length > 0 ? `📎 ${attachments.map((a) => a.name).join(', ')}` : '';
+    const displayText = [text, attachmentNote].filter(Boolean).join('\n\n');
+    setLogs((prev) => [...prev, { kind: 'user', text: displayText }]);
+    bridge.sendPrompt(selectedBotId, text, attachments);
   }
 
   const selectedBot = bots.find((b) => b.id === selectedBotId) ?? null;

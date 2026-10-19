@@ -1,0 +1,45 @@
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: var(--radius-full);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.attachment-chip__name {
+  white-space: nowrap;
+}
+
+.attachment-chip__remove {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--duration-micro) ease,
+    color var(--duration-micro) ease;
+}
+
+.attachment-chip__remove:hover {
+  background: rgba(255, 83, 112, 0.15);
+  color: var(--danger);
+}
+
+.attachment-chip__remove:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}

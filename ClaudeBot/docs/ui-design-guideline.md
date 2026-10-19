@@ -2,9 +2,9 @@
 id: ui-design-guideline
 title: UI design szabályzat
 type: ui-design-guideline
-version: 0.8.0
+version: 0.9.0
 created: 2026-10-15
-updated: 2026-10-16
+updated: 2026-10-19
 references:
   - architecture-c3-react-ui
 ---
@@ -97,7 +97,9 @@ Mind a négy típus `--font-mono`-t használ (a log-szerű, fejlesztői jellegű
 - *ChatView* — a chat-keret Glass Base szint (`rgba(255,255,255,0.04)`, 1px `rgba(255,255,255,0.07)` keret, blur nélkül, hogy a hosszú szöveg ne veszítsen kontrasztot); a tetején jobbra igazítva az "Open" gomb (Secondary-variáns) és a beállítások-ikon; alul fix pozícióban a beviteli sáv (ld. Beviteli sáv); automatikus görgetés az utolsó üzenetre, kivéve ha a felhasználó kézzel feljebb görgetett.
 - *Üres állapot* — a "Még nincs üzenet" felirat középre igazítva, `rgba(139,155,187,1)` színnel.
 
-**Beviteli sáv (önálló `ChatInput` komponens, bővíthetőség miatt elkülönítve):** Glass Base keret (`rgba(255,255,255,0.04)`, 1px `rgba(255,255,255,0.08)` keret, `--radius-lg`), benne balra egy auto-növő `textarea` (max-magasság 120px, placeholder `rgba(74,86,112,1)`), jobbra egy 40×40px küldés-gomb (Primary Button Pattern: teal→kék gradiens + glow, "→" glyph). `Enter` küld, `Shift+Enter` új sort — ez a konvenció minden jövőbeli, a beviteli sávba kerülő funkcióra is érvényes marad.
+**Beviteli sáv (önálló `ChatInput` komponens, bővíthetőség miatt elkülönítve):** Glass Base keret (`rgba(255,255,255,0.04)`, 1px `rgba(255,255,255,0.08)` keret, `--radius-lg`), benne balra egy auto-növő `textarea` (alapértelmezett magasság 56px, max 5 sorig nő — kb. 121px — onnantól saját scrollbar jelenik meg; placeholder és beírt szöveg egyaránt függőlegesen középre igazítva), jobbra, a konténer jobb alsó sarkához rögzítve egy 40×40px küldés-gomb (Primary Button Pattern: teal→kék gradiens + glow, send-ikon), a scrollbar és a gomb között 4px rés. `Enter` küld, `Shift+Enter` új sort — ez a konvenció minden jövőbeli, a beviteli sávba kerülő funkcióra is érvényes marad.
+
+**Csatolmány-sáv (az üzenet-terület és a beviteli mező között):** csak akkor foglal helyet (8px — `--sp-2` — réssel mindkét szomszédja felé), ha az éppen szerkesztett üzenethez legalább egy fájl van csatolva (drag&drop-pal vagy vágólapról, Ctrl+V-vel) — üres állapotban nincs extra térköz. Minden csatolt fájlhoz egy Attachment Chip jelenik meg: Glass felület (`rgba(255,255,255,0.06)`, 1px `rgba(255,255,255,0.11)` keret), `--radius-full` lekerekítés (pill-alak), benne a fájlnév (13px, `--font-ui`, 5 karakter után levágva és `...`-tal jelezve, pl. `valam...`), teljes fájlnévvel `title`-tooltipként, jobb szélén egy 18×18px kerek "✕" törlés-gomb (`rgba(139,155,187,1)` alapszín, hoveren `rgba(255,83,112,0.15)` háttér + `rgba(255,83,112,1)` szöveg — ugyanaz a hiba-szín-logika, mint a validációs hibajelzésnél). A csatolmányok csak a tényleges üzenetküldéskor kerülnek át a bot workspace-ébe; amíg az üzenet nincs elküldve, kizárólag kliensoldali állapot.
 
 **Gombok (Aurora Button Pattern):**
 
@@ -109,7 +111,7 @@ Mind a négy típus `--font-mono`-t használ (a log-szerű, fejlesztői jellegű
 
 Magasság: 40px standard; padding `--sp-4` vízszintes, `--sp-2` függőleges; lekerekítés `--radius-md` (10px).
 
-**Állapot-jelölők:** ld. a Bot-állapot sort a fenti táblázatban — ez az egyetlen badge/chip jellegű elem jelenleg.
+**Állapot-jelölők:** ld. a Bot-állapot sort a fenti táblázatban. A másik chip-jellegű elem az Attachment Chip (ld. Csatolmány-sáv) — vizuálisan eltérő szerepű (nem állapotjelző, hanem eltávolítható, tooltippel ellátott adat-elem), ezért saját, pill-alakú konvenciót kapott, nem az állapot-pötty mintáját követi.
 
 ## Interakciós szabályok
 

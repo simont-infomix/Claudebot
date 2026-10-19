@@ -72,7 +72,35 @@ public class WebViewBridge
                     if (root.TryGetProperty("botId", out var promptBotIdProp) &&
                         root.TryGetProperty("text", out var promptTextProp))
                     {
-                        _manager.SendPrompt(promptBotIdProp.GetString() ?? "", promptTextProp.GetString() ?? "");
+                        var botId = promptBotIdProp.GetString() ?? "";
+                        var attachmentNames = new List<string>();
+
+                        if (root.TryGetProperty("attachments", out var attachmentsProp) &&
+                            attachmentsProp.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var attachment in attachmentsProp.EnumerateArray())
+                            {
+                                if (!attachment.TryGetProperty("name", out var attNameProp) ||
+                                    !attachment.TryGetProperty("dataBase64", out var attDataProp))
+                                    continue;
+
+                                try
+                                {
+                                    var savedName = _manager.SaveAttachment(
+                                        botId, attNameProp.GetString() ?? "", attDataProp.GetString() ?? "");
+                                    if (savedName != null)
+                                    {
+                                        attachmentNames.Add(savedName);
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    PostEvent(new { type = "error", message = $"Csatolmány mentése sikertelen: {ex.Message}" });
+                                }
+                            }
+                        }
+
+                        _manager.SendPrompt(botId, promptTextProp.GetString() ?? "", attachmentNames);
                     }
                     break;
             }

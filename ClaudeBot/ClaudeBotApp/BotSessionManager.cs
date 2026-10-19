@@ -47,9 +47,29 @@ public class BotSessionManager
         return (true, null);
     }
 
-    public void SendPrompt(string name, string text)
+    public void SendPrompt(string name, string text, IReadOnlyList<string>? attachmentNames = null)
     {
-        FindBot(name)?.SendPrompt(text);
+        FindBot(name)?.SendPrompt(text, attachmentNames);
+    }
+
+    /// <summary>Base64-tartalmat ment le fájlba a bot workspace-ébe. A fájlnevet Path.GetFileName-nel
+    /// tisztítjuk, hogy a kliens oldalról érkező elérési út ne mutathasson a mappán kívülre.
+    /// Visszaadja a ténylegesen elmentett fájlnevet, vagy null-t, ha a bot nem található.</summary>
+    public string? SaveAttachment(string botName, string fileName, string base64Data)
+    {
+        var bot = FindBot(botName);
+        if (bot == null)
+            return null;
+
+        var safeName = Path.GetFileName(fileName);
+        if (string.IsNullOrWhiteSpace(safeName))
+            return null;
+
+        var bytes = Convert.FromBase64String(base64Data);
+        var fullPath = Path.Combine(bot.FolderPath, safeName);
+        File.WriteAllBytes(fullPath, bytes);
+
+        return safeName;
     }
 
     public void OpenTerminal(string name)

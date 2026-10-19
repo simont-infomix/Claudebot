@@ -75,10 +75,26 @@ public class BotSession
         }
     }
 
-    public void SendPrompt(string text)
+    public void SendPrompt(string text, IReadOnlyList<string>? attachmentNames = null)
     {
-        if (_process == null || _process.HasExited || string.IsNullOrWhiteSpace(text))
+        var hasAttachments = attachmentNames != null && attachmentNames.Count > 0;
+        if (_process == null || _process.HasExited || (string.IsNullOrWhiteSpace(text) && !hasAttachments))
             return;
+
+        var promptText = text;
+        var displayText = text;
+
+        if (hasAttachments)
+        {
+            // A claude.exe-nek @fájlnév hivatkozást küldünk (a bot workspace-ében már lemenve várja).
+            var fileRefs = string.Join(" ", attachmentNames!.Select(n => $"@{n}"));
+            promptText = string.IsNullOrWhiteSpace(text) ? fileRefs : $"{text}\n\n{fileRefs}";
+
+            // A history-ba ugyanaz a jelzés kerül, mint amit a React optimistán megjelenít,
+            // hogy bot-váltás után is konzisztens maradjon a megjelenítés.
+            var fileNote = $"📎 {string.Join(", ", attachmentNames!)}";
+            displayText = string.IsNullOrWhiteSpace(text) ? fileNote : $"{text}\n\n{fileNote}";
+        }
 
         var payload = new
         {
@@ -86,7 +102,7 @@ public class BotSession
             session_id = "",
             type = "user",
             parent_tool_use_id = (string?)null,
-            message = new { content = text, role = "user" }
+            message = new { content = promptText, role = "user" }
         };
 
         try
@@ -96,7 +112,7 @@ public class BotSession
 
             // Csak a history-ba kerül be (a kiválasztott bot React oldala már optimistán
             // megjelenítette a saját üzenetét) — nincs esemény-dobás, hogy ne duplikálódjon.
-            AccumulatedLog.Add(new LogLine(LogKind.User, text));
+            AccumulatedLog.Add(new LogLine(LogKind.User, displayText));
         }
         catch (Exception ex)
         {
