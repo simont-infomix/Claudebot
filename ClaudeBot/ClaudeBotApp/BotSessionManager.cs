@@ -116,7 +116,8 @@ public class BotSessionManager
     /// azonosítót, hogy a UI követni tudja a kijelölést.</summary>
     public (bool success, string? error, string? newId) ApplySettings(
         string id, string newName, IReadOnlyList<string> allowedTools,
-        string? model, string? effort, string? permissionMode)
+        string? model, string? effort, string? permissionMode,
+        IReadOnlyList<ScheduledTask> scheduledTasks)
     {
         var bot = FindBot(id);
         if (bot == null)
@@ -151,11 +152,48 @@ public class BotSessionManager
         bot.Model = string.IsNullOrWhiteSpace(model) ? null : model.Trim();
         bot.Effort = string.IsNullOrWhiteSpace(effort) ? null : effort.Trim();
         bot.PermissionMode = string.IsNullOrWhiteSpace(permissionMode) ? BotSession.DefaultPermissionMode : permissionMode.Trim();
+        bot.ScheduledTasks = scheduledTasks.ToList();
 
         SaveMeta(bot);
         bot.Restart();
         BotListChanged?.Invoke();
         return (true, null, newId);
+    }
+
+    /// <summary>A "Bot definíció" és "Képességek" tab tartalmát adja vissza: az agent.md nyers
+    /// szövege (ha van), illetve a workspace .claude/skills és .claude/agents mappáinak
+    /// tartalomjegyzéke. Csak olvasás — a skill-ek/sub agent-ek karbantartása még nincs
+    /// megvalósítva a UI-n, ez egyelőre információs lista.</summary>
+    public (string? agentDefinition, IReadOnlyList<string> skills, IReadOnlyList<string> subAgents) GetBotDetails(string id)
+    {
+        var bot = FindBot(id);
+        if (bot == null)
+            return (null, Array.Empty<string>(), Array.Empty<string>());
+
+        var agentPath = Path.Combine(bot.FolderPath, BotSession.AgentFileName);
+        var agentDefinition = File.Exists(agentPath) ? File.ReadAllText(agentPath) : null;
+
+        var skillsDir = Path.Combine(bot.FolderPath, ".claude", "skills");
+        var skills = Directory.Exists(skillsDir)
+            ? Directory.GetDirectories(skillsDir)
+                .Select(Path.GetFileName)
+                .Where(n => !string.IsNullOrEmpty(n))
+                .Select(n => n!)
+                .OrderBy(n => n)
+                .ToList()
+            : new List<string>();
+
+        var agentsDir = Path.Combine(bot.FolderPath, ".claude", "agents");
+        var subAgents = Directory.Exists(agentsDir)
+            ? Directory.GetFiles(agentsDir, "*.md")
+                .Select(Path.GetFileNameWithoutExtension)
+                .Where(n => !string.IsNullOrEmpty(n))
+                .Select(n => n!)
+                .OrderBy(n => n)
+                .ToList()
+            : new List<string>();
+
+        return (agentDefinition, skills, subAgents);
     }
 
     public void SetAvatar(string id, string contentType, string base64Data)
@@ -232,6 +270,10 @@ public class BotSessionManager
             {
                 bot.PermissionMode = meta.PermissionMode;
             }
+            if (meta?.ScheduledTasks != null)
+            {
+                bot.ScheduledTasks = meta.ScheduledTasks;
+            }
         }
         catch (JsonException)
         {
@@ -248,6 +290,7 @@ public class BotSessionManager
             Model = bot.Model,
             Effort = bot.Effort,
             PermissionMode = bot.PermissionMode,
+            ScheduledTasks = bot.ScheduledTasks,
         };
         File.WriteAllText(GetMetaPath(bot), JsonSerializer.Serialize(meta));
     }
@@ -259,6 +302,7 @@ public class BotSessionManager
         public string? Model { get; set; }
         public string? Effort { get; set; }
         public string? PermissionMode { get; set; }
+        public List<ScheduledTask>? ScheduledTasks { get; set; }
     }
 
     public void OpenTerminal(string name)

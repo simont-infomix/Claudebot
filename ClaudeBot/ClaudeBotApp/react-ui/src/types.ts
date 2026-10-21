@@ -1,5 +1,14 @@
 export type BotStatus = 'running' | 'stopped' | 'error';
 
+export type SettingsTab = 'settings' | 'definition' | 'capabilities' | 'tasks';
+
+export interface ScheduledTask {
+  id: string;
+  name: string;
+  schedule: string;
+  prompt: string;
+}
+
 export interface Bot {
   id: string;
   name: string;
@@ -9,6 +18,7 @@ export interface Bot {
   model: string | null;
   effort: string | null;
   permissionMode: string;
+  scheduledTasks: ScheduledTask[];
 }
 
 export interface BotSettingsDraft {
@@ -17,6 +27,13 @@ export interface BotSettingsDraft {
   model: string | null;
   effort: string | null;
   permissionMode: string;
+  scheduledTasks: ScheduledTask[];
+}
+
+export interface BotDetails {
+  agentDefinition: string | null;
+  skills: string[];
+  subAgents: string[];
 }
 
 export type LogKind = 'assistant' | 'info' | 'error' | 'user' | 'thinking';
@@ -42,6 +59,7 @@ export type HostRequest =
   | ({ type: 'saveSettings'; botId: string } & BotSettingsDraft)
   | { type: 'setSettingsDirty'; dirty: boolean }
   | { type: 'respondToExitConfirm'; confirmed: boolean }
+  | { type: 'getBotDetails'; botId: string }
   | { type: 'sendPrompt'; botId: string; text: string; attachments: EncodedAttachment[] };
 
 export type HostEvent =
@@ -51,4 +69,5 @@ export type HostEvent =
   | { type: 'botStatusChanged'; botId: string; status: BotStatus }
   | { type: 'botRenamed'; oldId: string; newId: string }
   | { type: 'confirmExit' }
+  | ({ type: 'botDetails'; botId: string } & BotDetails)
   | { type: 'error'; message: string };

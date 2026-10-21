@@ -22,6 +22,17 @@ public enum LogKind
 
 public readonly record struct LogLine(LogKind Kind, string Text);
 
+/// <summary>Egy bot-onként definiált, ütemezett feladat — egyelőre csak adatmodell: a
+/// tényleges időzített végrehajtás (scheduler) még nincs megírva, ez a Feladatok tab
+/// CRUD-jának perzisztencia-rétege.</summary>
+public class ScheduledTask
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = "";
+    public string Schedule { get; set; } = "";
+    public string Prompt { get; set; } = "";
+}
+
 public class BotSession
 {
     public const string AgentFileName = "agent.md";
@@ -39,6 +50,7 @@ public class BotSession
     public string? Model { get; set; }
     public string? Effort { get; set; }
     public string PermissionMode { get; set; } = DefaultPermissionMode;
+    public List<ScheduledTask> ScheduledTasks { get; set; } = new();
     public List<LogLine> AccumulatedLog { get; } = new();
     public BotStatus Status { get; private set; } = BotStatus.Stopped;
 

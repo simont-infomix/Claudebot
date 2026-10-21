@@ -61,6 +61,10 @@ class BridgeClient {
     this.send({ type: 'respondToExitConfirm', confirmed });
   }
 
+  getBotDetails(botId: string): void {
+    this.send({ type: 'getBotDetails', botId });
+  }
+
   sendPrompt(botId: string, text: string, attachments: EncodedAttachment[] = []): void {
     this.send({ type: 'sendPrompt', botId, text, attachments });
   }

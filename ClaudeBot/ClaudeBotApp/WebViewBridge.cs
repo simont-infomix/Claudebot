@@ -118,9 +118,25 @@ public class WebViewBridge
                         var permissionMode = root.TryGetProperty("permissionMode", out var permissionModeProp)
                             ? permissionModeProp.GetString() : null;
 
+                        var scheduledTasks = new List<ScheduledTask>();
+                        if (root.TryGetProperty("scheduledTasks", out var tasksProp) &&
+                            tasksProp.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var taskEl in tasksProp.EnumerateArray())
+                            {
+                                scheduledTasks.Add(new ScheduledTask
+                                {
+                                    Id = taskEl.TryGetProperty("id", out var tIdProp) ? tIdProp.GetString() ?? Guid.NewGuid().ToString("N") : Guid.NewGuid().ToString("N"),
+                                    Name = taskEl.TryGetProperty("name", out var tNameProp) ? tNameProp.GetString() ?? "" : "",
+                                    Schedule = taskEl.TryGetProperty("schedule", out var tScheduleProp) ? tScheduleProp.GetString() ?? "" : "",
+                                    Prompt = taskEl.TryGetProperty("prompt", out var tPromptProp) ? tPromptProp.GetString() ?? "" : "",
+                                });
+                            }
+                        }
+
                         var botId = settingsBotIdProp.GetString() ?? "";
                         var (success, error, newId) = _manager.ApplySettings(
-                            botId, settingsNameProp.GetString() ?? "", tools, model, effort, permissionMode);
+                            botId, settingsNameProp.GetString() ?? "", tools, model, effort, permissionMode, scheduledTasks);
 
                         if (!success)
                         {
@@ -130,6 +146,22 @@ public class WebViewBridge
                         {
                             PostEvent(new { type = "botRenamed", oldId = botId, newId });
                         }
+                    }
+                    break;
+
+                case "getBotDetails":
+                    if (root.TryGetProperty("botId", out var detailsBotIdProp))
+                    {
+                        var detailsBotId = detailsBotIdProp.GetString() ?? "";
+                        var (agentDefinition, skills, subAgents) = _manager.GetBotDetails(detailsBotId);
+                        PostEvent(new
+                        {
+                            type = "botDetails",
+                            botId = detailsBotId,
+                            agentDefinition,
+                            skills,
+                            subAgents,
+                        });
                     }
                     break;
 
@@ -221,6 +253,7 @@ public class WebViewBridge
             model = b.Model,
             effort = b.Effort,
             permissionMode = b.PermissionMode,
+            scheduledTasks = b.ScheduledTasks.Select(t => new { id = t.Id, name = t.Name, schedule = t.Schedule, prompt = t.Prompt }),
         });
 
         PostEvent(new { type = "botList", bots });

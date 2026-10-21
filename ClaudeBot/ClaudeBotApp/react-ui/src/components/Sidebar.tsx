@@ -1,5 +1,5 @@
 import { useState, type MouseEvent } from 'react';
-import type { Bot } from '../types';
+import type { Bot, SettingsTab } from '../types';
 import { BotContextMenu } from './BotContextMenu';
 import './Sidebar.css';
 
@@ -8,7 +8,7 @@ interface Props {
   selectedBotId: string | null;
   onSelect: (botId: string) => void;
   onAddClick: () => void;
-  onOpenSettings: (botId: string) => void;
+  onOpenSettings: (botId: string, tab: SettingsTab) => void;
   onOpenWorkspaceFolder: (botId: string) => void;
   onOpenTerminal: (botId: string) => void;
   onRestart: (botId: string) => void;
@@ -64,7 +64,7 @@ export function Sidebar({
         <BotContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          onSettings={() => onOpenSettings(contextMenu.botId)}
+          onOpenTab={(tab) => onOpenSettings(contextMenu.botId, tab)}
           onOpenWorkspaceFolder={() => onOpenWorkspaceFolder(contextMenu.botId)}
           onOpenTerminal={() => onOpenTerminal(contextMenu.botId)}
           onRestart={() => onRestart(contextMenu.botId)}

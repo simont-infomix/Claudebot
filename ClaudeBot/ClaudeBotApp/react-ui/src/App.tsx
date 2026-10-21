@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { bridge } from './bridge/BridgeClient';
-import type { Bot, BotSettingsDraft, EncodedAttachment, LogLine } from './types';
+import type { Bot, BotDetails, BotSettingsDraft, EncodedAttachment, LogLine, SettingsTab } from './types';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { SettingsView } from './components/SettingsView';
@@ -15,8 +15,10 @@ export default function App() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('settings');
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
+  const [botDetails, setBotDetails] = useState<BotDetails | null>(null);
 
   useEffect(() => {
     bridge.getBots();
@@ -52,6 +54,15 @@ export default function App() {
         case 'confirmExit':
           setExitConfirmOpen(true);
           break;
+        case 'botDetails':
+          if (event.botId === selectedBotId) {
+            setBotDetails({
+              agentDefinition: event.agentDefinition,
+              skills: event.skills,
+              subAgents: event.subAgents,
+            });
+          }
+          break;
         case 'error':
           setDialogError(event.message);
           setSettingsError(event.message);
@@ -67,7 +78,15 @@ export default function App() {
     setLogs([]);
     setSettingsOpen(false);
     setSettingsError(null);
+    setBotDetails(null);
     bridge.selectBot(botId);
+  }
+
+  function handleOpenSettings(botId: string, tab: SettingsTab) {
+    handleSelectBot(botId);
+    setSettingsTab(tab);
+    setSettingsOpen(true);
+    bridge.getBotDetails(botId);
   }
 
   function handleCreateBot(name: string) {
@@ -96,10 +115,7 @@ export default function App() {
           setDialogError(null);
           setDialogOpen(true);
         }}
-        onOpenSettings={(botId) => {
-          handleSelectBot(botId);
-          setSettingsOpen(true);
-        }}
+        onOpenSettings={handleOpenSettings}
         onOpenWorkspaceFolder={(botId) => bridge.openWorkspaceFolder(botId)}
         onOpenTerminal={(botId) => bridge.openTerminal(botId)}
         onRestart={(botId) => bridge.restartBot(botId)}
@@ -109,6 +125,9 @@ export default function App() {
         <SettingsView
           bot={selectedBot}
           open={settingsOpen}
+          activeTab={settingsTab}
+          onTabChange={setSettingsTab}
+          details={botDetails}
           error={settingsError}
           onClose={() => {
             setSettingsOpen(false);
