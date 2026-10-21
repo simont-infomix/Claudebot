@@ -45,7 +45,9 @@
 .settings-view__save {
   position: absolute;
   top: var(--sp-4);
-  right: var(--sp-4);
+  /* a jobb oldali görgetősáv a .settings-view__body margójában (var(--sp-4)) + saját
+     szélességében (10px) ül — ennyivel+kis ráhagyással kell beljebb lennie, hogy ne lógjon rá */
+  right: calc(var(--sp-4) + 10px + var(--sp-2));
   z-index: 1;
   height: 40px;
   padding: 0 var(--sp-4);
@@ -75,7 +77,7 @@
 .settings-view__error {
   position: absolute;
   top: calc(var(--sp-4) + 48px);
-  right: var(--sp-4);
+  right: calc(var(--sp-4) + 10px + var(--sp-2));
   max-width: 320px;
   background: rgba(255, 83, 112, 0.1);
   border: 1px solid rgba(255, 83, 112, 0.3);

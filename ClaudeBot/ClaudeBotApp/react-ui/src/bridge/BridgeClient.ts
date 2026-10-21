@@ -53,6 +53,14 @@ class BridgeClient {
     this.send({ type: 'saveSettings', botId, ...settings });
   }
 
+  setSettingsDirty(dirty: boolean): void {
+    this.send({ type: 'setSettingsDirty', dirty });
+  }
+
+  respondToExitConfirm(confirmed: boolean): void {
+    this.send({ type: 'respondToExitConfirm', confirmed });
+  }
+
   sendPrompt(botId: string, text: string, attachments: EncodedAttachment[] = []): void {
     this.send({ type: 'sendPrompt', botId, text, attachments });
   }

@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { SettingsView } from './components/SettingsView';
 import { NewBotDialog } from './components/NewBotDialog';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import './App.css';
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
 
   useEffect(() => {
     bridge.getBots();
@@ -46,6 +48,9 @@ export default function App() {
           break;
         case 'botRenamed':
           setSelectedBotId((current) => (current === event.oldId ? event.newId : current));
+          break;
+        case 'confirmExit':
+          setExitConfirmOpen(true);
           break;
         case 'error':
           setDialogError(event.message);
@@ -112,6 +117,7 @@ export default function App() {
           onSetAvatar={(contentType, dataBase64) =>
             selectedBot && bridge.setBotAvatar(selectedBot.id, contentType, dataBase64)
           }
+          onDirtyChange={(dirty) => bridge.setSettingsDirty(dirty)}
           onSave={(settings: BotSettingsDraft) => {
             setSettingsError(null);
             selectedBot && bridge.saveSettings(selectedBot.id, settings);
@@ -123,6 +129,20 @@ export default function App() {
           error={dialogError}
           onSubmit={handleCreateBot}
           onClose={() => setDialogOpen(false)}
+        />
+      )}
+      {exitConfirmOpen && (
+        <ConfirmDialog
+          title="Alkalmazás bezárása"
+          message="Egy bot Settings lapján mentetlen módosítások vannak. Biztosan bezárod az alkalmazást mentés nélkül?"
+          onCancel={() => {
+            setExitConfirmOpen(false);
+            bridge.respondToExitConfirm(false);
+          }}
+          onConfirm={() => {
+            setExitConfirmOpen(false);
+            bridge.respondToExitConfirm(true);
+          }}
         />
       )}
     </div>

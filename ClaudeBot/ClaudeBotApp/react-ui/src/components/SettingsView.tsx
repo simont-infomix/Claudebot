@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import type { Bot, BotSettingsDraft } from '../types';
 import { Select } from './Select';
+import { ConfirmDialog } from './ConfirmDialog';
 import './SettingsView.css';
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
   onClose: () => void;
   onSetAvatar: (contentType: string, dataBase64: string) => void;
   onSave: (settings: BotSettingsDraft) => void;
+  onDirtyChange: (dirty: boolean) => void;
 }
 
 // Gyors hozzáadás gombok: a leggyakrabban használt MCP-szerverek wildcard-mintái. Nem egy élő
@@ -78,17 +80,19 @@ function draftsEqual(a: BotSettingsDraft, b: BotSettingsDraft): boolean {
   );
 }
 
-export function SettingsView({ bot, open, error, onClose, onSetAvatar, onSave }: Props) {
+export function SettingsView({ bot, open, error, onClose, onSetAvatar, onSave, onDirtyChange }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState<BotSettingsDraft | null>(bot ? draftFromBot(bot) : null);
   const [isEditingName, setIsEditingName] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   // Csak bot-váltáskor (más id) töltjük újra a draftot a bot aktuális állapotából — így egy
   // élő botStatusChanged/botList frissítés nem írja felül a félkész, még nem mentett szerkesztést.
   useEffect(() => {
     setDraft(bot ? draftFromBot(bot) : null);
     setIsEditingName(false);
+    setShowCloseConfirm(false);
   }, [bot?.id]);
 
   useEffect(() => {
@@ -98,7 +102,29 @@ export function SettingsView({ bot, open, error, onClose, onSetAvatar, onSave }:
     }
   }, [isEditingName]);
 
+  const isDirty = bot && draft ? !draftsEqual(draft, draftFromBot(bot)) : false;
+
+  // A hosztnak (WinForms) is jeleznünk kell, hogy van-e mentetlen módosítás, hogy alkalmazás-
+  // bezáráskor (FormClosing) ott is rá tudjon kérdezni, ne csak a beállítások lap bezárásakor.
+  useEffect(() => {
+    onDirtyChange(isDirty);
+  }, [isDirty, onDirtyChange]);
+
   if (!bot || !draft) return null;
+
+  function requestClose() {
+    if (isDirty) {
+      setShowCloseConfirm(true);
+    } else {
+      onClose();
+    }
+  }
+
+  function discardAndClose() {
+    setDraft(draftFromBot(bot!));
+    setShowCloseConfirm(false);
+    onClose();
+  }
 
   async function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -136,8 +162,6 @@ export function SettingsView({ bot, open, error, onClose, onSetAvatar, onSave }:
     onSave({ ...draft!, name: trimmedName });
   }
 
-  const isDirty = !draftsEqual(draft, draftFromBot(bot));
-
   // Az ismert minták mindig megjelennek (engedélyezett/nem-engedélyezett állapottal), plusz
   // minden, korábban (pl. a régi szabadszöveges mezővel) felvett egyedi minta is — hogy ne
   // tűnjön el némán egy már elmentett, de a listán kívüli minta.
@@ -150,7 +174,7 @@ export function SettingsView({ bot, open, error, onClose, onSetAvatar, onSave }:
 
   return (
     <div className={`settings-view${open ? ' settings-view--open' : ''}`}>
-      <button type="button" className="settings-view__back" onClick={onClose} aria-label="Vissza">
+      <button type="button" className="settings-view__back" onClick={requestClose} aria-label="Vissza">
         ←
       </button>
 
@@ -161,6 +185,15 @@ export function SettingsView({ bot, open, error, onClose, onSetAvatar, onSave }:
       )}
 
       {error && <div className="settings-view__error">{error}</div>}
+
+      {showCloseConfirm && (
+        <ConfirmDialog
+          title="Mentetlen változtatások"
+          message="A beállításokon végzett módosítások nincsenek elmentve. Biztosan bezárod a beállítások lapot mentés nélkül?"
+          onCancel={() => setShowCloseConfirm(false)}
+          onConfirm={discardAndClose}
+        />
+      )}
 
       <div className="settings-view__body">
         <button

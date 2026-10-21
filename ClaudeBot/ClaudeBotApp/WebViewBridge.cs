@@ -10,6 +10,15 @@ public class WebViewBridge
     private readonly WebView2 _webView;
     private readonly BotSessionManager _manager;
 
+    /// <summary>A React oldal jelzi ezen keresztül, ha egy bot Settings lapján mentetlen
+    /// módosítás van — a Form1_FormClosing ez alapján kérdez rá bezáráskor.</summary>
+    public bool HasUnsavedSettings { get; private set; }
+
+    /// <summary>A Form1_FormClosing a bezárás helyett ezt hívja, ha mentetlen módosítás van —
+    /// a React oldal a saját (Aurora-stílusú) megerősítő dialógusát jeleníti meg a natív
+    /// WinForms MessageBox helyett, majd a döntést itt jelzi vissza.</summary>
+    public event Action<bool>? ExitConfirmResponse;
+
     public WebViewBridge(WebView2 webView, BotSessionManager manager)
     {
         _webView = webView;
@@ -19,6 +28,11 @@ public class WebViewBridge
         _manager.BotListChanged += SendBotList;
         _manager.LogReceived += OnLogReceived;
         _manager.BotStatusChanged += OnBotStatusChanged;
+    }
+
+    public void RequestExitConfirmation()
+    {
+        PostEvent(new { type = "confirmExit" });
     }
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -116,6 +130,20 @@ public class WebViewBridge
                         {
                             PostEvent(new { type = "botRenamed", oldId = botId, newId });
                         }
+                    }
+                    break;
+
+                case "setSettingsDirty":
+                    if (root.TryGetProperty("dirty", out var dirtyProp))
+                    {
+                        HasUnsavedSettings = dirtyProp.GetBoolean();
+                    }
+                    break;
+
+                case "respondToExitConfirm":
+                    if (root.TryGetProperty("confirmed", out var confirmedProp))
+                    {
+                        ExitConfirmResponse?.Invoke(confirmedProp.GetBoolean());
                     }
                     break;
 

@@ -40,6 +40,8 @@ export type HostRequest =
   | { type: 'restartBot'; botId: string }
   | { type: 'setBotAvatar'; botId: string; contentType: string; dataBase64: string }
   | ({ type: 'saveSettings'; botId: string } & BotSettingsDraft)
+  | { type: 'setSettingsDirty'; dirty: boolean }
+  | { type: 'respondToExitConfirm'; confirmed: boolean }
   | { type: 'sendPrompt'; botId: string; text: string; attachments: EncodedAttachment[] };
 
 export type HostEvent =
@@ -48,4 +50,5 @@ export type HostEvent =
   | { type: 'logAppended'; botId: string; line: LogLine }
   | { type: 'botStatusChanged'; botId: string; status: BotStatus }
   | { type: 'botRenamed'; oldId: string; newId: string }
+  | { type: 'confirmExit' }
   | { type: 'error'; message: string };
