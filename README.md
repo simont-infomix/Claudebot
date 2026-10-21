@@ -1,6 +1,6 @@
 # AI csapat
 
-AI ügynökcsapat, amely a development department manager napi munkáját tehermenesíti: feldolgozza a leveleket, a Teams üzeneteket és a naptárat, válaszokat készít elő, az új igényeket pedig jóváhagyás után végigviszi a requirementektől az Azure DevOps jegyekig.
+AI ügynökcsapat, amely a development department manager napi munkáját tehermenesíti: feldolgozza a leveleket, a Teams üzeneteket és a naptárat, válaszokat készít elő, az új igényeket pedig jóváhagyás után kidolgoztatja — a requirementektől az előkészített Azure DevOps jegyekig —, majd a kész anyagot átadja a humán szoftverfejlesztőknek. A fejlesztést magát nem a csapat végzi.
 
 > **Állapot:** tervezés, a megvalósítás még nem kezdődött el.
 
@@ -18,10 +18,10 @@ AI ügynökcsapat, amely a development department manager napi munkáját teherm
 | Ügynök | Hogyan fut | Feladat |
 |---|---|---|
 | **Asszisztens** | Ütemezetten, a Claude desktop app ütemezett feladataként | Olvassa a leveleket, a Teams üzeneteket és a naptárat. Válaszpiszkozatot ír a manager nevében az Outlookba. Információgyűjtéshez subagentként indíthatja a Librariant, a BA-t, az Architectet és a Scrum Mastert. Az új igényeket és feladatokat javaslatként (proposal) beküldi a jóváhagyó oldalra. |
-| **Project Manager (PM)** | API hívásra, a jóváhagyás után | Egy-egy új igény vagy feladat teljes útját vezényli. A Librariant, a BA-t, az Architectet és a Scrum Mastert subagentként indítja. Az Asszisztenst nem indíthatja. |
+| **Project Manager (PM)** | API hívásra, a jóváhagyás után | Egy-egy új igény vagy feladat kidolgoztatásáért felel: összegyűjti a szükséges információkat, és a requirementeket, a tervet és az Azure DevOps jegyeket előkészítteti. A fejlesztést magát nem vezényli — a kész jegyeket a humán szoftverfejlesztőknek adja át. A Librariant, a BA-t, az Architectet és a Scrum Mastert subagentként indítja. Az Asszisztenst nem indíthatja. |
 | **Librarian** | Subagent | Projektenként egy Karpathy-féle LLM wiki tudástárat vezet. Elraktározza az információt, és kikeresi más ügynököknek. Műveletei: ingest, query, lint. |
-| **Business Analyst** | Subagent | Az üzleti igényekből fejlesztési requirementek lesznek: user story, elfogadási kritériumok, PRD. |
-| **Architect** | Subagent | Technológiai terveket készít elő (terv, ADR), és fejlesztői jegyekre bontja a munkát. |
+| **Business Analyst** | Subagent | Az üzleti igényből és az Architect megvalósíthatósági visszajelzéséből fejlesztési requirementek lesznek: user story, elfogadási kritériumok, PRD. Az Architecttel iteratívan dolgozik. |
+| **Architect** | Subagent | Már a requirementek előtt felméri a megvalósítási lehetőségeket, majd a BA-val iteratívan finomítva technológiai terveket készít elő (terv, ADR), és fejlesztői jegyekre bontja a munkát. |
 | **Scrum Master** | Subagent | Kezeli és karbantartja az Azure DevOps jegyeket: létrehozás, ütemezés, sprintbe sorolás, státusz. |
 
 **Technikai korlát:** egy subagent nem indíthat további subagentet, csak egy szintű a hierarchia. Ezért a PM nem lehet az Asszisztens subagentje. A PM önálló folyamatként indul, a jóváhagyó oldal API hívására.
@@ -44,11 +44,17 @@ AI ügynökcsapat, amely a development department manager napi munkáját teherm
  [PM]  a szerver elindítja:  claude -p "<PM szerep + igény>"
        a munkaterület mappájában
        ├─► Librarian ──► wiki (git repó)
-       ├─► BA / Architect
+       ├─► BA ⇄ Architect  (iteratív egyeztetés, lásd lent)
        └─► Scrum Master ──► Azure DevOps (MCP)
        │
        └─ státusz, kérdések és eredmények vissza a web appba (API)
 ```
+
+### BA és Architect: tyúk-tojás probléma
+
+A Business Analyst és az Architect nem egymás után, lineárisan dolgozik. A BA-nak a requirementek megírásához nem csak az üzleti igényt kell ismernie, hanem azt is, mi valósítható meg egyáltalán és milyen áron — ehhez az Architect inputja kell. Az Architectnek viszont a tervhez a BA által pontosított requirementek kellenek. Ezért az Architect jellemzően **korábban** száll be, mint a BA: először egy nagyvonalú megvalósíthatósági körképet ad, a BA ez alapján és az üzleti igény alapján megírja a requirementeket, az Architect ezekből tervet készít, és ha közben újabb kérdés vagy korlát merül fel, a kör megismétlődik.
+
+A PM feladata ezt az iterációt vezényelni: oda-vissza futtatja a BA-t és az Architectet, amíg a requirementek és a terv konzisztensek és megvalósíthatóak lesznek, és eldönti, mikor elég jó ez a konvergencia ahhoz, hogy a Scrum Master jegyeket készíthessen belőle.
 
 ### Egy javaslat életútja
 
@@ -66,20 +72,22 @@ Cím, projekt, forrás (link a levélre vagy Teams üzenetre), összefoglaló, j
 
 ## Tudástár (Karpathy-féle LLM wiki)
 
-Projektenként egy wiki:
+Projektenként egy wiki, **saját, önálló git repóban**:
 
 ```
-wiki/<projekt>/
+wiki/<projekt>/   ← önálló git repó
   raw/        ← nyers források (levelek, jegyzetek, dokumentumok)
   pages/      ← a Librarian által karbantartott oldalak (entitások, döntések, fogalmak)
   index.md    ← tartalomjegyzék
   log.md      ← időrendi napló a változásokról
 ```
 
+Mivel minden wiki saját git repó a fő `ai-team` repón belül, ez **"git a git-ben"** felállást eredményez: a gyökér `.gitignore` kizárja a `wiki/` mappa tartalmát a fő repó verziókövetéséből, így a beágyazott wiki-repók teljesen függetlenül élnek, és a fő repó nem próbálja kezelni őket.
+
 - **ingest:** új anyag feldolgozása, a kapcsolódó oldalak frissítése.
 - **query:** válasz más ügynökök kérdéseire a wiki alapján.
 - **lint:** ellentmondások, elavult és árva oldalak keresése, rendszeresen.
-- Mivel a Librariant az Asszisztens és a PM is indíthatja, írás előtt zárol (lock fájl), és minden változtatást git commitként rögzít.
+- Mivel a Librariant az Asszisztens és a PM is indíthatja, írás előtt zárol (lock fájl), és minden változtatást a projekt saját wiki-repójába commitol.
 
 ## Repó szerkezete
 
@@ -91,7 +99,8 @@ ai-team/                  ← egyetlen git repó (később Azure DevOps Repos)
     .claude/agents/       ← librarian.md, analyst.md, architect.md, scrum-master.md
     roles/                ← assistant.md, pm.md
     .mcp.json             ← Azure DevOps MCP csatlakozó
-  wiki/                   ← tudástár (később külön repó lehet)
+  wiki/<projekt>/         ← projektenként ÖNÁLLÓ git repó, a .gitignore kizárja a fő repóból
+  .gitignore              ← kizárja a wiki/ tartalmát (git a git-ben felállás)
   setup.ps1               ← telepítés új gépen
   .env.example            ← minta a titkokhoz (a valódi .env nincs a gitben)
   Dockerfile, docker-compose.yml   ← opcionális, egy későbbi szerverre költözéshez
@@ -124,3 +133,36 @@ ai-team/                  ← egyetlen git repó (később Azure DevOps Repos)
 4. PM a BA-val és az Architecttel.
 5. Scrum Master és az Azure DevOps bekötése.
 6. Telepítő szkript, költözési próba.
+
+## ClaudeBot — önálló termék ugyanebben a repóban
+
+> **Állapot:** POC / aktív fejlesztés.
+
+A `ClaudeBot/` mappában egy **önálló, különálló alkalmazás** lakik: egy Windows asztali tálca-app,
+amely egy vagy több `claude.exe` (Claude Code CLI) subprocesst futtat headlessen (nincs
+konzolablak), mindegyiket egy saját munkaterület-mappához kötve, és mindegyikhez saját,
+egyedi chat-felületet ad az alkalmazáson belül. Az ötlet a fenti Asszisztens-koncepcióból
+(levél/Teams-triázs, draft-only, ember a döntési pontokon) indult ki, de **nem annak kiterjesztése**
+— saját kódbázis, saját futtatási infrastruktúra, ugyanebben a git repóban.
+
+**Architektúra (4 container):**
+
+| Komponens | Technológia | Felelősség |
+|---|---|---|
+| WinForms Host | .NET 10, C# WinForms | Egyetlen folyamat: a WebView2-t hosztolja, indítja/felügyeli a bot-session-öket (subprocesseket). |
+| React UI | React, WebView2-n megjelenítve | A teljes felület: bot-választó sáv (Sidebar), chat-nézet fájlcsatolással, beállítások (SettingsView), bot-kontextusmenü. Egy JS bridge-en (`WebViewBridge`) keresztül kommunikál a hosttal. |
+| Bot workspace | Helyi fájlrendszer | Botonként egy almappa — ez a `claude.exe` munkakönyvtára, benne a skill-ek/agent-configok (`BotTemplate/`). |
+| Claude Code CLI session | `claude.exe`, headless, `stream-json` | Botonként egy önálló, hosszú életű subprocess, ami a tényleges agent-logikát futtatja; stdin/stdout JSON-sorokon kommunikál a hosttal. |
+
+**Jelenlegi funkciók (POC):**
+- Több bot egyidejű indítása és felügyelete (multi-bot host)
+- Chat-felület botonként, fájlcsatolással (drag&drop + vágólap)
+- Bot-kontextusmenü (jobbklikk): terminál-munkamenet megnyitása, munkamappa megnyitása Intézőben
+- Beállítások nézet (SettingsView)
+- Bot-sablon (`BotTemplate/`) a munkaterület alapértelmezett `.claude/skills` tartalmához
+
+**Dokumentáció:** a részletes terv és a formális specifikációs dokumentumok a `ClaudeBot/` mappában
+élnek, külön a fenti tudástár-rendszertől:
+- `ClaudeBot/specification.md` — az eredeti, informális terv (v1 hatókör, architektúra, elvetett alternatívák)
+- `ClaudeBot/docs/Index.md` — a formális dokumentumkészlet tartalomjegyzéke: use case-ek (UC-001–004),
+  C1/C2/C3 architektúra-diagramok, UI design szabályzat

@@ -17,6 +17,7 @@ public enum LogKind
     Info,
     Error,
     User,
+    Thinking,
 }
 
 public readonly record struct LogLine(LogKind Kind, string Text);
@@ -24,10 +25,20 @@ public readonly record struct LogLine(LogKind Kind, string Text);
 public class BotSession
 {
     public const string AgentFileName = "agent.md";
+    public const string DebugLogFileName = "claudebot-stream.log";
+    public const string DefaultPermissionMode = "acceptEdits";
 
-    public string Name { get; }
-    public string FolderPath { get; }
+    // Új bot ezzel indul, ha a Settings felületen még nem állított be egyedi listát —
+    // minden MCP-szerver tool-ját engedi, a natív (Bash stb.) tool-okat szándékosan nem.
+    public static readonly IReadOnlyList<string> DefaultAllowedTools = new[] { "mcp__*" };
+
+    public string Name { get; private set; }
+    public string FolderPath { get; private set; }
     public string DisplayName { get; set; }
+    public List<string> AllowedTools { get; set; } = new(DefaultAllowedTools);
+    public string? Model { get; set; }
+    public string? Effort { get; set; }
+    public string PermissionMode { get; set; } = DefaultPermissionMode;
     public List<LogLine> AccumulatedLog { get; } = new();
     public BotStatus Status { get; private set; } = BotStatus.Stopped;
 
@@ -41,6 +52,14 @@ public class BotSession
         Name = name;
         FolderPath = folderPath;
         DisplayName = name;
+    }
+
+    /// <summary>A workspace-mappa átnevezése után hívandó — a BotSessionManager felelőssége a
+    /// tényleges Directory.Move elvégzése, ez csak az in-memory állapotot frissíti utána.</summary>
+    public void Rename(string newName, string newFolderPath)
+    {
+        Name = newName;
+        FolderPath = newFolderPath;
     }
 
     public void Start()
@@ -65,7 +84,29 @@ public class BotSession
         psi.ArgumentList.Add("stream-json");
         psi.ArgumentList.Add("--verbose");
         psi.ArgumentList.Add("--permission-mode");
-        psi.ArgumentList.Add("acceptEdits");
+        psi.ArgumentList.Add(string.IsNullOrWhiteSpace(PermissionMode) ? DefaultPermissionMode : PermissionMode);
+
+        if (!string.IsNullOrWhiteSpace(Model))
+        {
+            psi.ArgumentList.Add("--model");
+            psi.ArgumentList.Add(Model);
+        }
+
+        if (!string.IsNullOrWhiteSpace(Effort))
+        {
+            psi.ArgumentList.Add("--effort");
+            psi.ArgumentList.Add(Effort);
+        }
+
+        // Headless (-p) módban nincs interaktív jóváhagyási csatorna: az acceptEdits csak a
+        // fájlszerkesztő tool-okat engedi automatikusan, minden más (MCP-hívások, Bash stb.)
+        // némán elutasításra kerülne jóváhagyás nélkül. Az AllowedTools-ot a Settings
+        // felületen bot-onként lehet karbantartani (lásd BotSessionManager.ApplySettings).
+        if (AllowedTools.Count > 0)
+        {
+            psi.ArgumentList.Add("--allowedTools");
+            psi.ArgumentList.Add(string.Join(",", AllowedTools));
+        }
 
         // Ha a grill-me folyamat korábban már létrehozott egy agent.md-t ebben a workspace-ben,
         // a tartalma system prompt kiegészítésként minden (új) indításkor újra átadódik.
@@ -129,11 +170,16 @@ public class BotSession
         try
         {
             var json = JsonSerializer.Serialize(payload);
+            LogDebug(">>", json);
             _process.StandardInput.WriteLine(json);
 
             // Csak a history-ba kerül be (a kiválasztott bot React oldala már optimistán
             // megjelenítette a saját üzenetét) — nincs esemény-dobás, hogy ne duplikálódjon.
             AccumulatedLog.Add(new LogLine(LogKind.User, displayText));
+
+            // Azonnali, vizuális jelzés, hogy elindult a feldolgozás — a claude.exe tényleges
+            // thinking/tool_use eseményei csak egy kis késéssel érkeznek meg.
+            RaiseLog(LogKind.Thinking, "Gondolkodik…");
         }
         catch (Exception ex)
         {
@@ -174,52 +220,88 @@ public class BotSession
         if (string.IsNullOrEmpty(e.Data))
             return;
 
-        string? text;
+        LogDebug("<<", e.Data);
+
         try
         {
             using var doc = JsonDocument.Parse(e.Data);
-            text = ExtractAssistantText(doc.RootElement);
+            foreach (var (kind, text) in ExtractLogEntries(doc.RootElement))
+            {
+                RaiseLog(kind, text);
+            }
         }
         catch (JsonException)
         {
-            text = e.Data;
-        }
-
-        if (!string.IsNullOrEmpty(text))
-        {
-            RaiseLog(LogKind.Assistant, text);
+            RaiseLog(LogKind.Info, e.Data);
         }
     }
 
-    private static string? ExtractAssistantText(JsonElement root)
+    // Egy "assistant" típusú stream-json sorból több log-bejegyzés is származhat: a végleges
+    // válasz-szöveg (type: text) egyetlen Assistant-buborékká áll össze, míg a köztes
+    // gondolkodás (type: thinking) és eszközhívások (type: tool_use) Thinking-sorokként,
+    // érkezési sorrendben kerülnek ki — ezekből építi fel a UI az összecsukható "gondolkodás" blokkot.
+    private static IEnumerable<(LogKind Kind, string Text)> ExtractLogEntries(JsonElement root)
     {
         if (!root.TryGetProperty("type", out var typeProp) || typeProp.GetString() != "assistant")
-            return null;
+            yield break;
 
         if (!root.TryGetProperty("message", out var message) ||
-            !message.TryGetProperty("content", out var content))
-            return null;
+            !message.TryGetProperty("content", out var content) ||
+            content.ValueKind != JsonValueKind.Array)
+            yield break;
 
-        var sb = new StringBuilder();
-        if (content.ValueKind == JsonValueKind.Array)
+        var textBuilder = new StringBuilder();
+
+        foreach (var item in content.EnumerateArray())
         {
-            foreach (var item in content.EnumerateArray())
+            if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty("type", out var itemTypeProp))
+                continue;
+
+            switch (itemTypeProp.GetString())
             {
-                if (item.ValueKind == JsonValueKind.Object &&
-                    item.TryGetProperty("type", out var itemType) &&
-                    itemType.GetString() == "text" &&
-                    item.TryGetProperty("text", out var textProp))
+                case "text":
+                    if (item.TryGetProperty("text", out var textProp))
+                        textBuilder.Append(textProp.GetString());
+                    break;
+
+                case "thinking":
+                    if (item.TryGetProperty("thinking", out var thinkingProp))
+                    {
+                        var thinkingText = thinkingProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(thinkingText))
+                            yield return (LogKind.Thinking, thinkingText);
+                    }
+                    break;
+
+                case "tool_use":
+                    yield return (LogKind.Thinking, DescribeToolUse(item));
+                    break;
+            }
+        }
+
+        if (textBuilder.Length > 0)
+            yield return (LogKind.Assistant, textBuilder.ToString());
+    }
+
+    private static string DescribeToolUse(JsonElement toolUseItem)
+    {
+        var name = toolUseItem.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : null;
+        var label = string.IsNullOrWhiteSpace(name) ? "eszköz" : name;
+
+        string? detail = null;
+        if (toolUseItem.TryGetProperty("input", out var input) && input.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in input.EnumerateObject())
+            {
+                if (prop.Value.ValueKind == JsonValueKind.String)
                 {
-                    sb.Append(textProp.GetString());
+                    detail = prop.Value.GetString();
+                    break;
                 }
             }
         }
-        else if (content.ValueKind == JsonValueKind.String)
-        {
-            sb.Append(content.GetString());
-        }
 
-        return sb.Length > 0 ? sb.ToString() : null;
+        return detail != null ? $"🔧 {label}: {detail}" : $"🔧 {label}";
     }
 
     private void OnErrorDataReceived(object? sender, DataReceivedEventArgs e)
@@ -227,6 +309,7 @@ public class BotSession
         if (string.IsNullOrEmpty(e.Data))
             return;
 
+        LogDebug("!!", e.Data);
         RaiseLog(LogKind.Error, e.Data);
     }
 
@@ -241,6 +324,22 @@ public class BotSession
         var line = new LogLine(kind, text);
         AccumulatedLog.Add(line);
         LogReceived?.Invoke(line);
+    }
+
+    // Minden nyers stream-json sor (ki- és bemenet is) egy fájlba kerül a bot workspace-ében —
+    // ez teszi lehetővé, hogy diagnosztizálni lehessen, pontosan mit küld a claude.exe olyan
+    // esetekben (pl. tool-engedélyezési kérés), amiket a UI még nem jelenít meg strukturáltan.
+    private void LogDebug(string direction, string text)
+    {
+        try
+        {
+            var line = $"[{DateTime.Now:HH:mm:ss.fff}] {direction} {text}{Environment.NewLine}";
+            File.AppendAllText(Path.Combine(FolderPath, DebugLogFileName), line);
+        }
+        catch
+        {
+            // a debug napló írása sosem akadályozhatja a tényleges működést
+        }
     }
 
     private void SetStatus(BotStatus status)

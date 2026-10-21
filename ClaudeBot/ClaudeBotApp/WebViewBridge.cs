@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
+using System.Linq;
 
 namespace ClaudeBotApp;
 
@@ -89,15 +90,31 @@ public class WebViewBridge
                     }
                     break;
 
-                case "setBotDisplayName":
-                    if (root.TryGetProperty("botId", out var nameBotIdProp) &&
-                        root.TryGetProperty("name", out var newNameProp))
+                case "saveSettings":
+                    if (root.TryGetProperty("botId", out var settingsBotIdProp) &&
+                        root.TryGetProperty("name", out var settingsNameProp) &&
+                        root.TryGetProperty("allowedTools", out var settingsToolsProp) &&
+                        settingsToolsProp.ValueKind == JsonValueKind.Array)
                     {
-                        var (success, error) = _manager.SetDisplayName(
-                            nameBotIdProp.GetString() ?? "", newNameProp.GetString() ?? "");
+                        var tools = settingsToolsProp.EnumerateArray()
+                            .Select(t => t.GetString() ?? "")
+                            .ToList();
+                        var model = root.TryGetProperty("model", out var modelProp) ? modelProp.GetString() : null;
+                        var effort = root.TryGetProperty("effort", out var effortProp) ? effortProp.GetString() : null;
+                        var permissionMode = root.TryGetProperty("permissionMode", out var permissionModeProp)
+                            ? permissionModeProp.GetString() : null;
+
+                        var botId = settingsBotIdProp.GetString() ?? "";
+                        var (success, error, newId) = _manager.ApplySettings(
+                            botId, settingsNameProp.GetString() ?? "", tools, model, effort, permissionMode);
+
                         if (!success)
                         {
                             PostEvent(new { type = "error", message = error });
+                        }
+                        else if (newId != null)
+                        {
+                            PostEvent(new { type = "botRenamed", oldId = botId, newId });
                         }
                     }
                     break;
@@ -172,6 +189,10 @@ public class WebViewBridge
             name = b.DisplayName,
             status = StatusToString(b.Status),
             avatarDataUrl = _manager.GetAvatarDataUrl(b.Name),
+            allowedTools = b.AllowedTools,
+            model = b.Model,
+            effort = b.Effort,
+            permissionMode = b.PermissionMode,
         });
 
         PostEvent(new { type = "botList", bots });
@@ -219,6 +240,7 @@ public class WebViewBridge
         LogKind.Error => "error",
         LogKind.Info => "info",
         LogKind.User => "user",
+        LogKind.Thinking => "thinking",
         _ => "assistant",
     };
 

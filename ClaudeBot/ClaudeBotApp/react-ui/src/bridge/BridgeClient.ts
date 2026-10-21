@@ -1,4 +1,4 @@
-import type { EncodedAttachment, HostEvent } from '../types';
+import type { BotSettingsDraft, EncodedAttachment, HostEvent } from '../types';
 
 type Listener = (event: HostEvent) => void;
 
@@ -45,12 +45,12 @@ class BridgeClient {
     this.send({ type: 'restartBot', botId });
   }
 
-  setBotDisplayName(botId: string, name: string): void {
-    this.send({ type: 'setBotDisplayName', botId, name });
-  }
-
   setBotAvatar(botId: string, contentType: string, dataBase64: string): void {
     this.send({ type: 'setBotAvatar', botId, contentType, dataBase64 });
+  }
+
+  saveSettings(botId: string, settings: BotSettingsDraft): void {
+    this.send({ type: 'saveSettings', botId, ...settings });
   }
 
   sendPrompt(botId: string, text: string, attachments: EncodedAttachment[] = []): void {

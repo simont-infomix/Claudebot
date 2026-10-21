@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { bridge } from './bridge/BridgeClient';
-import type { Bot, EncodedAttachment, LogLine } from './types';
+import type { Bot, BotSettingsDraft, EncodedAttachment, LogLine } from './types';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { SettingsView } from './components/SettingsView';
@@ -14,6 +14,7 @@ export default function App() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   useEffect(() => {
     bridge.getBots();
@@ -43,8 +44,12 @@ export default function App() {
             prev.map((b) => (b.id === event.botId ? { ...b, status: event.status } : b)),
           );
           break;
+        case 'botRenamed':
+          setSelectedBotId((current) => (current === event.oldId ? event.newId : current));
+          break;
         case 'error':
           setDialogError(event.message);
+          setSettingsError(event.message);
           break;
       }
     });
@@ -56,6 +61,7 @@ export default function App() {
     setSelectedBotId(botId);
     setLogs([]);
     setSettingsOpen(false);
+    setSettingsError(null);
     bridge.selectBot(botId);
   }
 
@@ -98,11 +104,18 @@ export default function App() {
         <SettingsView
           bot={selectedBot}
           open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
+          error={settingsError}
+          onClose={() => {
+            setSettingsOpen(false);
+            setSettingsError(null);
+          }}
           onSetAvatar={(contentType, dataBase64) =>
             selectedBot && bridge.setBotAvatar(selectedBot.id, contentType, dataBase64)
           }
-          onSetName={(name) => selectedBot && bridge.setBotDisplayName(selectedBot.id, name)}
+          onSave={(settings: BotSettingsDraft) => {
+            setSettingsError(null);
+            selectedBot && bridge.saveSettings(selectedBot.id, settings);
+          }}
         />
       </div>
       {dialogOpen && (

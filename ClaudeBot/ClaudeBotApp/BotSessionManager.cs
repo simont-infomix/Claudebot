@@ -55,6 +55,7 @@ public class BotSessionManager
         CopyTemplate(folderPath);
 
         var bot = AddBot(name, folderPath);
+        SaveMeta(bot);
         bot.SendPrompt(InitialOnboardingPrompt);
         return (true, null);
     }
@@ -107,20 +108,54 @@ public class BotSessionManager
         return safeName;
     }
 
-    public (bool success, string? error) SetDisplayName(string id, string newDisplayName)
+    /// <summary>A Settings lap "Mentés" gombja ezt hívja: elmenti a név/tool-engedélyek/model/
+    /// effort/permission-mode mezőket, és újraindítja a bot session-t, mert a claude.exe csak
+    /// induláskor olvassa ezeket — élő folyamaton egyik sem módosítható. Ha a név megváltozott,
+    /// előtte leállítja a futó folyamatot és átnevezi a workspace-mappát is, mert a bot neve és a
+    /// mappaneve mindig megegyezik. Sikeres átnevezés esetén newId-ban visszaadja az új
+    /// azonosítót, hogy a UI követni tudja a kijelölést.</summary>
+    public (bool success, string? error, string? newId) ApplySettings(
+        string id, string newName, IReadOnlyList<string> allowedTools,
+        string? model, string? effort, string? permissionMode)
     {
         var bot = FindBot(id);
         if (bot == null)
-            return (false, "A bot nem található.");
+            return (false, "A bot nem található.", null);
 
-        var trimmed = newDisplayName.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return (false, "A név nem lehet üres.");
+        var trimmedName = newName.Trim();
+        if (string.IsNullOrWhiteSpace(trimmedName))
+            return (false, "A név nem lehet üres.", null);
 
-        bot.DisplayName = trimmed;
+        if (trimmedName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            return (false, "A név nem tartalmazhat érvénytelen fájlnév-karaktert.", null);
+
+        string? newId = null;
+        if (trimmedName != bot.Name)
+        {
+            var newFolderPath = Path.Combine(_rootDir, trimmedName);
+            if (Directory.Exists(newFolderPath))
+                return (false, "Már létezik ilyen nevű bot.", null);
+
+            bot.Stop();
+            Directory.Move(bot.FolderPath, newFolderPath);
+            bot.Rename(trimmedName, newFolderPath);
+            newId = trimmedName;
+        }
+
+        bot.DisplayName = trimmedName;
+        bot.AllowedTools = allowedTools
+            .Select(t => t.Trim())
+            .Where(t => t.Length > 0)
+            .Distinct()
+            .ToList();
+        bot.Model = string.IsNullOrWhiteSpace(model) ? null : model.Trim();
+        bot.Effort = string.IsNullOrWhiteSpace(effort) ? null : effort.Trim();
+        bot.PermissionMode = string.IsNullOrWhiteSpace(permissionMode) ? BotSession.DefaultPermissionMode : permissionMode.Trim();
+
         SaveMeta(bot);
+        bot.Restart();
         BotListChanged?.Invoke();
-        return (true, null);
+        return (true, null, newId);
     }
 
     public void SetAvatar(string id, string contentType, string base64Data)
@@ -187,22 +222,43 @@ public class BotSessionManager
             {
                 bot.DisplayName = meta.DisplayName;
             }
+            if (meta?.AllowedTools != null)
+            {
+                bot.AllowedTools = meta.AllowedTools;
+            }
+            bot.Model = meta?.Model;
+            bot.Effort = meta?.Effort;
+            if (!string.IsNullOrWhiteSpace(meta?.PermissionMode))
+            {
+                bot.PermissionMode = meta.PermissionMode;
+            }
         }
         catch (JsonException)
         {
-            // sérült meta-fájl — az alapértelmezett (mappanév) DisplayName marad érvényben
+            // sérült meta-fájl — az alapértelmezett (mappanév) DisplayName/AllowedTools marad érvényben
         }
     }
 
     private static void SaveMeta(BotSession bot)
     {
-        var meta = new BotMeta { DisplayName = bot.DisplayName };
+        var meta = new BotMeta
+        {
+            DisplayName = bot.DisplayName,
+            AllowedTools = bot.AllowedTools,
+            Model = bot.Model,
+            Effort = bot.Effort,
+            PermissionMode = bot.PermissionMode,
+        };
         File.WriteAllText(GetMetaPath(bot), JsonSerializer.Serialize(meta));
     }
 
     private sealed class BotMeta
     {
         public string? DisplayName { get; set; }
+        public List<string>? AllowedTools { get; set; }
+        public string? Model { get; set; }
+        public string? Effort { get; set; }
+        public string? PermissionMode { get; set; }
     }
 
     public void OpenTerminal(string name)
