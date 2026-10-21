@@ -20,6 +20,14 @@
     <None Remove="react-ui/**" />
   </ItemGroup>
 
+  <!-- A BotTemplate/ statikus fájlai (skillek) minden új bot workspace-ébe bemásolódnak —
+       a tartalom csak futásidőben, a CopyBotTemplateOutput target által kerül a kimenetbe. -->
+  <ItemGroup>
+    <Compile Remove="BotTemplate/**" />
+    <EmbeddedResource Remove="BotTemplate/**" />
+    <None Remove="BotTemplate/**" />
+  </ItemGroup>
+
   <PropertyGroup>
     <ReactUiDir>$(MSBuildProjectDirectory)\react-ui</ReactUiDir>
   </PropertyGroup>
@@ -34,6 +42,13 @@
       <ReactUiFiles Include="$(ReactUiDir)\dist\**\*.*" />
     </ItemGroup>
     <Copy SourceFiles="@(ReactUiFiles)" DestinationFolder="$(OutDir)webui\%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyBotTemplateOutput" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\BotTemplate')">
+    <ItemGroup>
+      <BotTemplateFiles Include="$(MSBuildProjectDirectory)\BotTemplate\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(BotTemplateFiles)" DestinationFolder="$(OutDir)BotTemplate\%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

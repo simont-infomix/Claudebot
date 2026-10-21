@@ -1,10 +1,18 @@
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace ClaudeBotApp;
 
 public class BotSessionManager
 {
+    private const string InitialOnboardingPrompt =
+        "Indítsd el a /grill-me skillt, és faggass ki alaposan arról, mi legyen ennek az agentnek " +
+        "a szerepe, célja és működési stílusa. A beszélgetés végén foglald össze a válaszaimat egy " +
+        "agent.md fájlba ennek a munkamappának a gyökerében — ez a fájl fogja meghatározni a " +
+        "jövőbeli indításaid system promptját.";
+
     private readonly string _rootDir;
+    private readonly string _templateDir;
     private readonly List<BotSession> _bots = new();
 
     public event Action? BotListChanged;
@@ -13,9 +21,10 @@ public class BotSessionManager
 
     public IReadOnlyList<BotSession> Bots => _bots;
 
-    public BotSessionManager(string rootDir)
+    public BotSessionManager(string rootDir, string templateDir)
     {
         _rootDir = rootDir;
+        _templateDir = templateDir;
     }
 
     public void LoadExisting()
@@ -43,8 +52,34 @@ public class BotSessionManager
             return (false, "Már létezik ilyen nevű bot.");
 
         Directory.CreateDirectory(folderPath);
-        AddBot(name, folderPath);
+        CopyTemplate(folderPath);
+
+        var bot = AddBot(name, folderPath);
+        bot.SendPrompt(InitialOnboardingPrompt);
         return (true, null);
+    }
+
+    public void RestartBot(string id)
+    {
+        FindBot(id)?.Restart();
+    }
+
+    private void CopyTemplate(string destFolder)
+    {
+        if (!Directory.Exists(_templateDir))
+            return;
+
+        foreach (var dir in Directory.GetDirectories(_templateDir, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(_templateDir, dir);
+            Directory.CreateDirectory(Path.Combine(destFolder, relative));
+        }
+
+        foreach (var file in Directory.GetFiles(_templateDir, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(_templateDir, file);
+            File.Copy(file, Path.Combine(destFolder, relative), overwrite: true);
+        }
     }
 
     public void SendPrompt(string name, string text, IReadOnlyList<string>? attachmentNames = null)
@@ -70,6 +105,104 @@ public class BotSessionManager
         File.WriteAllBytes(fullPath, bytes);
 
         return safeName;
+    }
+
+    public (bool success, string? error) SetDisplayName(string id, string newDisplayName)
+    {
+        var bot = FindBot(id);
+        if (bot == null)
+            return (false, "A bot nem található.");
+
+        var trimmed = newDisplayName.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return (false, "A név nem lehet üres.");
+
+        bot.DisplayName = trimmed;
+        SaveMeta(bot);
+        BotListChanged?.Invoke();
+        return (true, null);
+    }
+
+    public void SetAvatar(string id, string contentType, string base64Data)
+    {
+        var bot = FindBot(id);
+        if (bot == null)
+            return;
+
+        foreach (var oldFile in Directory.GetFiles(bot.FolderPath, ".bot-avatar.*"))
+        {
+            File.Delete(oldFile);
+        }
+
+        var bytes = Convert.FromBase64String(base64Data);
+        var ext = ExtensionForContentType(contentType);
+        File.WriteAllBytes(Path.Combine(bot.FolderPath, $".bot-avatar{ext}"), bytes);
+        BotListChanged?.Invoke();
+    }
+
+    public string? GetAvatarDataUrl(string id)
+    {
+        var bot = FindBot(id);
+        if (bot == null)
+            return null;
+
+        var file = Directory.GetFiles(bot.FolderPath, ".bot-avatar.*").FirstOrDefault();
+        if (file == null)
+            return null;
+
+        var mime = ContentTypeForExtension(Path.GetExtension(file));
+        var base64 = Convert.ToBase64String(File.ReadAllBytes(file));
+        return $"data:{mime};base64,{base64}";
+    }
+
+    private static string ExtensionForContentType(string contentType) => contentType switch
+    {
+        "image/png" => ".png",
+        "image/jpeg" => ".jpg",
+        "image/webp" => ".webp",
+        "image/gif" => ".gif",
+        _ => ".png",
+    };
+
+    private static string ContentTypeForExtension(string extension) => extension.TrimStart('.').ToLowerInvariant() switch
+    {
+        "jpg" or "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => "image/png",
+    };
+
+    private static string GetMetaPath(BotSession bot) => Path.Combine(bot.FolderPath, ".bot-meta.json");
+
+    private static void LoadMeta(BotSession bot)
+    {
+        var path = GetMetaPath(bot);
+        if (!File.Exists(path))
+            return;
+
+        try
+        {
+            var meta = JsonSerializer.Deserialize<BotMeta>(File.ReadAllText(path));
+            if (!string.IsNullOrWhiteSpace(meta?.DisplayName))
+            {
+                bot.DisplayName = meta.DisplayName;
+            }
+        }
+        catch (JsonException)
+        {
+            // sérült meta-fájl — az alapértelmezett (mappanév) DisplayName marad érvényben
+        }
+    }
+
+    private static void SaveMeta(BotSession bot)
+    {
+        var meta = new BotMeta { DisplayName = bot.DisplayName };
+        File.WriteAllText(GetMetaPath(bot), JsonSerializer.Serialize(meta));
+    }
+
+    private sealed class BotMeta
+    {
+        public string? DisplayName { get; set; }
     }
 
     public void OpenTerminal(string name)
@@ -111,14 +244,16 @@ public class BotSessionManager
         }
     }
 
-    private void AddBot(string name, string folderPath)
+    private BotSession AddBot(string name, string folderPath)
     {
         var bot = new BotSession(name, folderPath);
         bot.LogReceived += line => LogReceived?.Invoke(bot, line);
         bot.StatusChanged += status => BotStatusChanged?.Invoke(bot, status);
+        LoadMeta(bot);
         _bots.Add(bot);
 
         bot.Start();
         BotListChanged?.Invoke();
+        return bot;
     }
 }

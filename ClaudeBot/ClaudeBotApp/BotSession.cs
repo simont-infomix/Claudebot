@@ -23,8 +23,11 @@ public readonly record struct LogLine(LogKind Kind, string Text);
 
 public class BotSession
 {
+    public const string AgentFileName = "agent.md";
+
     public string Name { get; }
     public string FolderPath { get; }
+    public string DisplayName { get; set; }
     public List<LogLine> AccumulatedLog { get; } = new();
     public BotStatus Status { get; private set; } = BotStatus.Stopped;
 
@@ -37,6 +40,7 @@ public class BotSession
     {
         Name = name;
         FolderPath = folderPath;
+        DisplayName = name;
     }
 
     public void Start()
@@ -44,7 +48,6 @@ public class BotSession
         var psi = new ProcessStartInfo
         {
             FileName = "claude.exe",
-            Arguments = "-p --input-format stream-json --output-format stream-json --verbose --permission-mode acceptEdits",
             WorkingDirectory = FolderPath,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
@@ -54,6 +57,24 @@ public class BotSession
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
+
+        psi.ArgumentList.Add("-p");
+        psi.ArgumentList.Add("--input-format");
+        psi.ArgumentList.Add("stream-json");
+        psi.ArgumentList.Add("--output-format");
+        psi.ArgumentList.Add("stream-json");
+        psi.ArgumentList.Add("--verbose");
+        psi.ArgumentList.Add("--permission-mode");
+        psi.ArgumentList.Add("acceptEdits");
+
+        // Ha a grill-me folyamat korábban már létrehozott egy agent.md-t ebben a workspace-ben,
+        // a tartalma system prompt kiegészítésként minden (új) indításkor újra átadódik.
+        var agentFilePath = Path.Combine(FolderPath, AgentFileName);
+        if (File.Exists(agentFilePath))
+        {
+            psi.ArgumentList.Add("--append-system-prompt");
+            psi.ArgumentList.Add(File.ReadAllText(agentFilePath));
+        }
 
         _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         _process.OutputDataReceived += OnOutputDataReceived;
@@ -140,6 +161,12 @@ public class BotSession
         {
             // a folyamat leállítása közben fellépő hibák nem akadályozhatják az app bezárását
         }
+    }
+
+    public void Restart()
+    {
+        Stop();
+        Start();
     }
 
     private void OnOutputDataReceived(object? sender, DataReceivedEventArgs e)

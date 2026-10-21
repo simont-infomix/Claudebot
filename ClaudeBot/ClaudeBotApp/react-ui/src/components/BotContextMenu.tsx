@@ -7,6 +7,7 @@ interface Props {
   onSettings: () => void;
   onOpenWorkspaceFolder: () => void;
   onOpenTerminal: () => void;
+  onRestart: () => void;
   onClose: () => void;
 }
 
@@ -16,6 +17,7 @@ export function BotContextMenu({
   onSettings,
   onOpenWorkspaceFolder,
   onOpenTerminal,
+  onRestart,
   onClose,
 }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -60,6 +62,9 @@ export function BotContextMenu({
         onClick={() => handleSelect(onOpenTerminal)}
       >
         Bot megnyitása Terminálban
+      </button>
+      <button type="button" className="context-menu__item" onClick={() => handleSelect(onRestart)}>
+        Újraindítás
       </button>
     </div>
   );

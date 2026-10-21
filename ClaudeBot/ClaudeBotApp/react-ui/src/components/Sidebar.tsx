@@ -11,6 +11,7 @@ interface Props {
   onOpenSettings: (botId: string) => void;
   onOpenWorkspaceFolder: (botId: string) => void;
   onOpenTerminal: (botId: string) => void;
+  onRestart: (botId: string) => void;
 }
 
 export function Sidebar({
@@ -21,6 +22,7 @@ export function Sidebar({
   onOpenSettings,
   onOpenWorkspaceFolder,
   onOpenTerminal,
+  onRestart,
 }: Props) {
   const [contextMenu, setContextMenu] = useState<{ botId: string; x: number; y: number } | null>(
     null,
@@ -43,7 +45,11 @@ export function Sidebar({
           title={bot.name}
         >
           <span className={`status-dot status-dot--${bot.status}`} />
-          {bot.name}
+          {bot.avatarDataUrl ? (
+            <img src={bot.avatarDataUrl} alt="" className="avatar__image" />
+          ) : (
+            bot.name
+          )}
         </button>
       ))}
       <button
@@ -61,6 +67,7 @@ export function Sidebar({
           onSettings={() => onOpenSettings(contextMenu.botId)}
           onOpenWorkspaceFolder={() => onOpenWorkspaceFolder(contextMenu.botId)}
           onOpenTerminal={() => onOpenTerminal(contextMenu.botId)}
+          onRestart={() => onRestart(contextMenu.botId)}
           onClose={() => setContextMenu(null)}
         />
       )}

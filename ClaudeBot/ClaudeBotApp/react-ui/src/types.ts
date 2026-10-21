@@ -4,6 +4,7 @@ export interface Bot {
   id: string;
   name: string;
   status: BotStatus;
+  avatarDataUrl: string | null;
 }
 
 export type LogKind = 'assistant' | 'info' | 'error' | 'user';
@@ -24,6 +25,9 @@ export type HostRequest =
   | { type: 'selectBot'; botId: string }
   | { type: 'openTerminal'; botId: string }
   | { type: 'openWorkspaceFolder'; botId: string }
+  | { type: 'restartBot'; botId: string }
+  | { type: 'setBotDisplayName'; botId: string; name: string }
+  | { type: 'setBotAvatar'; botId: string; contentType: string; dataBase64: string }
   | { type: 'sendPrompt'; botId: string; text: string; attachments: EncodedAttachment[] };
 
 export type HostEvent =

@@ -7,3 +7,10 @@
     radial-gradient(ellipse 60% 50% at 85% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 60%),
     var(--bg-base);
 }
+
+.content-slot {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+}

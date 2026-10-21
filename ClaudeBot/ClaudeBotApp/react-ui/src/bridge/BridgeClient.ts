@@ -41,6 +41,18 @@ class BridgeClient {
     this.send({ type: 'openWorkspaceFolder', botId });
   }
 
+  restartBot(botId: string): void {
+    this.send({ type: 'restartBot', botId });
+  }
+
+  setBotDisplayName(botId: string, name: string): void {
+    this.send({ type: 'setBotDisplayName', botId, name });
+  }
+
+  setBotAvatar(botId: string, contentType: string, dataBase64: string): void {
+    this.send({ type: 'setBotAvatar', botId, contentType, dataBase64 });
+  }
+
   sendPrompt(botId: string, text: string, attachments: EncodedAttachment[] = []): void {
     this.send({ type: 'sendPrompt', botId, text, attachments });
   }

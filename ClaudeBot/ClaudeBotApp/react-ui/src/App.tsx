@@ -3,6 +3,7 @@ import { bridge } from './bridge/BridgeClient';
 import type { Bot, EncodedAttachment, LogLine } from './types';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
+import { SettingsView } from './components/SettingsView';
 import { NewBotDialog } from './components/NewBotDialog';
 import './App.css';
 
@@ -12,6 +13,7 @@ export default function App() {
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     bridge.getBots();
@@ -53,6 +55,7 @@ export default function App() {
   function handleSelectBot(botId: string) {
     setSelectedBotId(botId);
     setLogs([]);
+    setSettingsOpen(false);
     bridge.selectBot(botId);
   }
 
@@ -82,11 +85,26 @@ export default function App() {
           setDialogError(null);
           setDialogOpen(true);
         }}
-        onOpenSettings={() => {}}
+        onOpenSettings={(botId) => {
+          handleSelectBot(botId);
+          setSettingsOpen(true);
+        }}
         onOpenWorkspaceFolder={(botId) => bridge.openWorkspaceFolder(botId)}
         onOpenTerminal={(botId) => bridge.openTerminal(botId)}
+        onRestart={(botId) => bridge.restartBot(botId)}
       />
-      <ChatView bot={selectedBot} logs={logs} onSendPrompt={handleSendPrompt} />
+      <div className="content-slot">
+        <ChatView bot={selectedBot} logs={logs} onSendPrompt={handleSendPrompt} />
+        <SettingsView
+          bot={selectedBot}
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          onSetAvatar={(contentType, dataBase64) =>
+            selectedBot && bridge.setBotAvatar(selectedBot.id, contentType, dataBase64)
+          }
+          onSetName={(name) => selectedBot && bridge.setBotDisplayName(selectedBot.id, name)}
+        />
+      </div>
       {dialogOpen && (
         <NewBotDialog
           error={dialogError}

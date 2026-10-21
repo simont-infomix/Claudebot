@@ -82,6 +82,45 @@ public class WebViewBridge
                     }
                     break;
 
+                case "restartBot":
+                    if (root.TryGetProperty("botId", out var restartIdProp))
+                    {
+                        _manager.RestartBot(restartIdProp.GetString() ?? "");
+                    }
+                    break;
+
+                case "setBotDisplayName":
+                    if (root.TryGetProperty("botId", out var nameBotIdProp) &&
+                        root.TryGetProperty("name", out var newNameProp))
+                    {
+                        var (success, error) = _manager.SetDisplayName(
+                            nameBotIdProp.GetString() ?? "", newNameProp.GetString() ?? "");
+                        if (!success)
+                        {
+                            PostEvent(new { type = "error", message = error });
+                        }
+                    }
+                    break;
+
+                case "setBotAvatar":
+                    if (root.TryGetProperty("botId", out var avatarBotIdProp) &&
+                        root.TryGetProperty("contentType", out var avatarContentTypeProp) &&
+                        root.TryGetProperty("dataBase64", out var avatarDataProp))
+                    {
+                        try
+                        {
+                            _manager.SetAvatar(
+                                avatarBotIdProp.GetString() ?? "",
+                                avatarContentTypeProp.GetString() ?? "image/png",
+                                avatarDataProp.GetString() ?? "");
+                        }
+                        catch (Exception ex)
+                        {
+                            PostEvent(new { type = "error", message = $"A kép mentése sikertelen: {ex.Message}" });
+                        }
+                    }
+                    break;
+
                 case "sendPrompt":
                     if (root.TryGetProperty("botId", out var promptBotIdProp) &&
                         root.TryGetProperty("text", out var promptTextProp))
@@ -130,8 +169,9 @@ public class WebViewBridge
         var bots = _manager.Bots.Select(b => new
         {
             id = b.Name,
-            name = b.Name,
+            name = b.DisplayName,
             status = StatusToString(b.Status),
+            avatarDataUrl = _manager.GetAvatarDataUrl(b.Name),
         });
 
         PostEvent(new { type = "botList", bots });
