@@ -13,3 +13,4 @@
 | architecture-c3-bot-workspace | Architektúra diagram — C3 (Component) – Bot workspace | architecture-c3 | docs/architecture-c3/bot-workspace.md |
 | architecture-c3-claude-code-cli-session | Architektúra diagram — C3 (Component) – Claude Code CLI session | architecture-c3 | docs/architecture-c3/claude-code-cli-session.md |
 | ui-design-guideline | UI design szabályzat | ui-design-guideline | docs/ui-design-guideline.md |
+| bug-001 | BUG-001 — A bot-terminál (cmd + claude + MCP-szerver) nem áll le az app bezárásakor | bug | docs/bugs/bug-001-terminal-folyamat-nem-all-le-bezaraskor.md |
