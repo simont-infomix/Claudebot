@@ -5,14 +5,7 @@ namespace ClaudeBotApp;
 
 public class BotSessionManager
 {
-    private const string InitialOnboardingPrompt =
-        "Indítsd el a /grill-me skillt, és faggass ki alaposan arról, mi legyen ennek az agentnek " +
-        "a szerepe, célja és működési stílusa. A beszélgetés végén foglald össze a válaszaimat egy " +
-        "agent.md fájlba ennek a munkamappának a gyökerében — ez a fájl fogja meghatározni a " +
-        "jövőbeli indításaid system promptját.";
-
     private readonly string _rootDir;
-    private readonly string _templateDir;
     private readonly List<BotSession> _bots = new();
 
     public event Action? BotListChanged;
@@ -21,10 +14,9 @@ public class BotSessionManager
 
     public IReadOnlyList<BotSession> Bots => _bots;
 
-    public BotSessionManager(string rootDir, string templateDir)
+    public BotSessionManager(string rootDir)
     {
         _rootDir = rootDir;
-        _templateDir = templateDir;
     }
 
     public void LoadExisting()
@@ -52,35 +44,15 @@ public class BotSessionManager
             return (false, "Már létezik ilyen nevű bot.");
 
         Directory.CreateDirectory(folderPath);
-        CopyTemplate(folderPath);
 
         var bot = AddBot(name, folderPath);
         SaveMeta(bot);
-        bot.SendPrompt(InitialOnboardingPrompt);
         return (true, null);
     }
 
     public void RestartBot(string id)
     {
         FindBot(id)?.Restart();
-    }
-
-    private void CopyTemplate(string destFolder)
-    {
-        if (!Directory.Exists(_templateDir))
-            return;
-
-        foreach (var dir in Directory.GetDirectories(_templateDir, "*", SearchOption.AllDirectories))
-        {
-            var relative = Path.GetRelativePath(_templateDir, dir);
-            Directory.CreateDirectory(Path.Combine(destFolder, relative));
-        }
-
-        foreach (var file in Directory.GetFiles(_templateDir, "*", SearchOption.AllDirectories))
-        {
-            var relative = Path.GetRelativePath(_templateDir, file);
-            File.Copy(file, Path.Combine(destFolder, relative), overwrite: true);
-        }
     }
 
     public void SendPrompt(string name, string text, IReadOnlyList<string>? attachmentNames = null)

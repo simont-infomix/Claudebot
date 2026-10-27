@@ -343,8 +343,7 @@ export function SettingsView({
               <pre className="settings-definition__content">{details.agentDefinition}</pre>
             ) : (
               <span className="settings-empty-note">
-                Még nincs agent.md ebben a workspace-ben — ez a grill-me skill lefutása után jön
-                létre.
+                Még nincs agent.md ebben a workspace-ben.
               </span>
             )}
           </div>

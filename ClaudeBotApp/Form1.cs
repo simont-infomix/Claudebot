@@ -6,7 +6,6 @@ public partial class Form1 : Form
 {
     private readonly string _botsRootDir = Path.Combine(AppContext.BaseDirectory, "Bots");
     private readonly string _webUiDir = Path.Combine(AppContext.BaseDirectory, "webui");
-    private readonly string _botTemplateDir = Path.Combine(AppContext.BaseDirectory, "BotTemplate");
     private BotSessionManager? _manager;
     private WebViewBridge? _bridge;
     private bool _forceClosing;
@@ -23,7 +22,7 @@ public partial class Form1 : Form
         webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
             "claudebot.local", _webUiDir, CoreWebView2HostResourceAccessKind.Allow);
 
-        _manager = new BotSessionManager(_botsRootDir, _botTemplateDir);
+        _manager = new BotSessionManager(_botsRootDir);
         _bridge = new WebViewBridge(webView, _manager);
         _bridge.ExitConfirmResponse += OnExitConfirmResponse;
         _manager.LoadExisting();

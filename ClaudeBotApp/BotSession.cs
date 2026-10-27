@@ -120,8 +120,8 @@ public class BotSession
             psi.ArgumentList.Add(string.Join(",", AllowedTools));
         }
 
-        // Ha a grill-me folyamat korábban már létrehozott egy agent.md-t ebben a workspace-ben,
-        // a tartalma system prompt kiegészítésként minden (új) indításkor újra átadódik.
+        // Ha a workspace gyökerében van egy agent.md, a tartalma system prompt kiegészítésként
+        // minden (új) indításkor újra átadódik.
         var agentFilePath = Path.Combine(FolderPath, AgentFileName);
         if (File.Exists(agentFilePath))
         {
