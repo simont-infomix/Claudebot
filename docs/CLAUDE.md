@@ -12,6 +12,37 @@ rendszerbe — nincs frontmatter-je, nincs `id`-ja, nem hivatkozható a `referen
 levezetett formális dokumentumok egyszerűen tartalomként veszik át a releváns részeket, hivatkozás
 nélkül.
 
+## A use case fogalma
+
+Egy use case egy **szereplő (actor) célját és az annak eléréséhez vezető üzleti/funkcionális
+folyamatot** írja le — azt, hogy *mit* ér el ezzel a felhasználó (vagy egy másik rendszer), nem
+azt, *hogyan* van ez megvalósítva. A tartalmi szerkezetét (Name, Goal, Actors, Flow, Potential
+errors, Expected outcome) a `usecase` skill definiálja.
+
+**Nem use case** (ezek nem indokolnak új/módosított use case-t):
+- egy UI-elem, elrendezés vagy vizuális visszajelzés (pl. egy "gondolkodik" jelző, egy tab-sáv),
+- egy belső technikai mechanizmus (pl. egy debug-napló, egy adatmodell mező, egy perzisztencia-
+  részlet),
+- egy meglévő use case flow-jának implementációs finomítása, ha az actor célja, a lépések és a
+  végeredmény érdemben nem változnak.
+
+**Új vagy frissítendő use case**, ha a változás:
+- új, önálló actor-célt vezet be, amit eddig semmilyen use case nem fedett (pl. "bot
+  beállításainak módosítása", "ütemezett feladat létrehozása egy bot számára"), vagy
+- érdemben megváltoztatja egy meglévő use case előfeltételét, lépéseit vagy végeredményét.
+
+Implementációs/technikai részleteket a C2/C3 architektúra-dokumentumok vagy a spec fedi le, nem a
+use case.
+
+## Use case-ek karbantartása fejlesztés közben
+
+Ha egy fejlesztési session új feature fejlesztésébe fog, a `docs/use-cases/` tartalmát a fenti
+definíció alapján a kóddal párhuzamosan, még ugyanabban a sessionben kell karban tartani — nem
+elég utólag, külön körben pótolni, mert az könnyen el is marad. Nem kell minden apró módosítást
+visszavezetni: elég az új funkcióhoz **új use case-t felvenni**, vagy egy már létező use case-t
+**frissíteni**, ha az valóban érinti azt. Ha egy változás egyik meglévő use case-t sem érinti és
+nem indokol újat, nincs teendő.
+
 ## Közös frontmatter
 
 Minden `docs/` alatti Markdown dokumentum ezzel a YAML frontmatterrel kezdődik:
