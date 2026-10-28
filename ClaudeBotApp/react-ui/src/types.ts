@@ -30,10 +30,15 @@ export interface BotSettingsDraft {
   scheduledTasks: ScheduledTask[];
 }
 
+export interface CapabilityInfo {
+  name: string;
+  description: string | null;
+}
+
 export interface BotDetails {
   agentDefinition: string | null;
-  skills: string[];
-  subAgents: string[];
+  skills: CapabilityInfo[];
+  subAgents: CapabilityInfo[];
 }
 
 export type LogKind = 'assistant' | 'info' | 'error' | 'user' | 'thinking';

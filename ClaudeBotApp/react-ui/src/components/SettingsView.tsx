@@ -26,12 +26,29 @@ const TABS: { id: SettingsTab; label: string }[] = [
 
 // Gyors hozzáadás gombok: a leggyakrabban használt MCP-szerverek wildcard-mintái. Nem egy élő
 // szerverlistából generálódnak — ha új MCP-szerver kerül bekötésre, ide is fel kell venni.
+// (A claude.exe system/init eseménye csak az éppen ENGEDÉLYEZETT tool-okat sorolja fel, egy
+// letiltott MCP-szerveré nem szerepel benne — ebből tehát nem lehet megbízhatóan dinamikusan
+// felépíteni a listát, mert egy kikapcsolt szervert soha nem lehetne újra bekapcsolni.)
 const SUGGESTED_TOOL_PATTERNS = [
   { label: 'Összes MCP tool', pattern: 'mcp__*' },
   { label: 'Azure DevOps', pattern: 'mcp__azure-devops__*' },
   { label: 'Todo MCP', pattern: 'mcp__todo-mcp__*' },
   { label: 'Microsoft 365', pattern: 'mcp__claude_ai_Microsoft_365__*' },
   { label: 'Claude Docs', pattern: 'mcp__claude_ai_Claude_Docs__*' },
+];
+
+// Natív (nem MCP) Claude Code tool-ok, amik egy headless botnál még értelmesen engedélyezhetők.
+// A Bash és más, a futtató harness-hez kötött tool-ok (Task, Workflow, CronCreate, PowerShell,
+// SendMessage stb.) szándékosan nincsenek itt — azokat külön kérésre kell felvenni.
+const SUGGESTED_NATIVE_TOOLS = [
+  { label: 'Read', pattern: 'Read', description: 'Fájlok tartalmának beolvasása a workspace-ből.' },
+  { label: 'Write', pattern: 'Write', description: 'Új fájlok létrehozása, vagy meglévők teljes felülírása a workspace-ben.' },
+  { label: 'Edit', pattern: 'Edit', description: 'Célzott, részleges szövegcsere egy meglévő fájlban.' },
+  { label: 'Glob', pattern: 'Glob', description: 'Fájlok keresése minta alapján (pl. *.md).' },
+  { label: 'Grep', pattern: 'Grep', description: 'Szöveges keresés fájlok tartalmában.' },
+  { label: 'WebFetch', pattern: 'WebFetch', description: 'Egy adott URL tartalmának lekérése és feldolgozása.' },
+  { label: 'WebSearch', pattern: 'WebSearch', description: 'Webes keresés friss, a tréning-adatokon túli információkhoz.' },
+  { label: 'Skill', pattern: 'Skill', description: 'Egy telepített skill (.claude/skills/ alatt) explicit meghívása.' },
 ];
 
 const MODEL_OPTIONS = [
@@ -207,12 +224,17 @@ export function SettingsView({
   // Az ismert minták mindig megjelennek (engedélyezett/nem-engedélyezett állapottal), plusz
   // minden, korábban (pl. a régi szabadszöveges mezővel) felvett egyedi minta is — hogy ne
   // tűnjön el némán egy már elmentett, de a listán kívüli minta.
-  const toolChips = [
+  const mcpToolChips = [
     ...SUGGESTED_TOOL_PATTERNS,
     ...draft.allowedTools
-      .filter((p) => !SUGGESTED_TOOL_PATTERNS.some((s) => s.pattern === p))
+      .filter(
+        (p) =>
+          !SUGGESTED_TOOL_PATTERNS.some((s) => s.pattern === p) &&
+          !SUGGESTED_NATIVE_TOOLS.some((s) => s.pattern === p),
+      )
       .map((p) => ({ label: p, pattern: p })),
   ];
+  const nativeToolChips = SUGGESTED_NATIVE_TOOLS;
 
   return (
     <div className={`settings-view${open ? ' settings-view--open' : ''}`}>
@@ -358,14 +380,16 @@ export function SettingsView({
                   ⓘ
                   <span className="info-icon__tooltip">
                     A claude.exe headless módban fut, nincs felugró jóváhagyás — csak az itt
-                    kiválasztott minták kapnak automatikus engedélyt. Natív tool-ok (Bash stb.)
-                    innen szándékosan nem engedélyezhetők.
+                    kiválasztott minták kapnak automatikus engedélyt. A Bash és a futtató-harness
+                    egyéb tool-jai (Task, Workflow, CronCreate stb.) innen szándékosan nem
+                    engedélyezhetők.
                   </span>
                 </span>
               </div>
 
+              <span className="settings-tools__subtitle">MCP szerverek</span>
               <div className="settings-tools__chips">
-                {toolChips.map((t) => {
+                {mcpToolChips.map((t) => {
                   const isEnabled = draft.allowedTools.includes(t.pattern);
                   return (
                     <button
@@ -376,6 +400,25 @@ export function SettingsView({
                     >
                       {t.label}
                       <span className="tool-chip__icon">{isEnabled ? '×' : '+'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <span className="settings-tools__subtitle">Natív tool-ok</span>
+              <div className="settings-tools__chips">
+                {nativeToolChips.map((t) => {
+                  const isEnabled = draft.allowedTools.includes(t.pattern);
+                  return (
+                    <button
+                      key={t.pattern}
+                      type="button"
+                      className={`tool-chip${isEnabled ? ' tool-chip--enabled' : ' tool-chip--disabled'}`}
+                      onClick={() => toggleTool(t.pattern)}
+                    >
+                      {t.label}
+                      <span className="tool-chip__icon">{isEnabled ? '×' : '+'}</span>
+                      {t.description && <span className="info-icon__tooltip">{t.description}</span>}
                     </button>
                   );
                 })}
@@ -396,9 +439,12 @@ export function SettingsView({
               </div>
               {details && details.subAgents.length > 0 ? (
                 <div className="settings-tools__chips">
-                  {details.subAgents.map((name) => (
-                    <span key={name} className="tool-chip tool-chip--readonly">
-                      {name}
+                  {details.subAgents.map((agent) => (
+                    <span key={agent.name} className="tool-chip tool-chip--readonly" tabIndex={0}>
+                      {agent.name}
+                      {agent.description && (
+                        <span className="info-icon__tooltip">{agent.description}</span>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -420,9 +466,12 @@ export function SettingsView({
               </div>
               {details && details.skills.length > 0 ? (
                 <div className="settings-tools__chips">
-                  {details.skills.map((name) => (
-                    <span key={name} className="tool-chip tool-chip--readonly">
-                      {name}
+                  {details.skills.map((skill) => (
+                    <span key={skill.name} className="tool-chip tool-chip--readonly" tabIndex={0}>
+                      {skill.name}
+                      {skill.description && (
+                        <span className="info-icon__tooltip">{skill.description}</span>
+                      )}
                     </span>
                   ))}
                 </div>

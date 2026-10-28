@@ -3,6 +3,10 @@ using System.Text.Json;
 
 namespace ClaudeBotApp;
 
+/// <summary>Egy skill vagy sub agent neve és a SKILL.md/agent .md frontmatterjéből kiolvasott
+/// rövid leírása — a "Képességek" tab chipjeinek tooltipjéhez.</summary>
+public record CapabilityInfo(string Name, string? Description);
+
 public class BotSessionManager
 {
     private readonly string _rootDir;
@@ -134,13 +138,14 @@ public class BotSessionManager
 
     /// <summary>A "Bot definíció" és "Képességek" tab tartalmát adja vissza: az agent.md nyers
     /// szövege (ha van), illetve a workspace .claude/skills és .claude/agents mappáinak
-    /// tartalomjegyzéke. Csak olvasás — a skill-ek/sub agent-ek karbantartása még nincs
-    /// megvalósítva a UI-n, ez egyelőre információs lista.</summary>
-    public (string? agentDefinition, IReadOnlyList<string> skills, IReadOnlyList<string> subAgents) GetBotDetails(string id)
+    /// tartalomjegyzéke — mindegyikhez a SKILL.md/agent .md YAML frontmatterjéből kiolvasott
+    /// rövid leírással, tooltiphez. Csak olvasás — a skill-ek/sub agent-ek karbantartása még
+    /// nincs megvalósítva a UI-n, ez egyelőre információs lista.</summary>
+    public (string? agentDefinition, IReadOnlyList<CapabilityInfo> skills, IReadOnlyList<CapabilityInfo> subAgents) GetBotDetails(string id)
     {
         var bot = FindBot(id);
         if (bot == null)
-            return (null, Array.Empty<string>(), Array.Empty<string>());
+            return (null, Array.Empty<CapabilityInfo>(), Array.Empty<CapabilityInfo>());
 
         var agentPath = Path.Combine(bot.FolderPath, BotSession.AgentFileName);
         var agentDefinition = File.Exists(agentPath) ? File.ReadAllText(agentPath) : null;
@@ -148,24 +153,61 @@ public class BotSessionManager
         var skillsDir = Path.Combine(bot.FolderPath, ".claude", "skills");
         var skills = Directory.Exists(skillsDir)
             ? Directory.GetDirectories(skillsDir)
-                .Select(Path.GetFileName)
-                .Where(n => !string.IsNullOrEmpty(n))
-                .Select(n => n!)
-                .OrderBy(n => n)
+                .Select(dir =>
+                {
+                    var name = Path.GetFileName(dir);
+                    var description = ExtractFrontmatterDescription(Path.Combine(dir, "SKILL.md"));
+                    return new CapabilityInfo(name, description);
+                })
+                .Where(c => !string.IsNullOrEmpty(c.Name))
+                .OrderBy(c => c.Name)
                 .ToList()
-            : new List<string>();
+            : new List<CapabilityInfo>();
 
         var agentsDir = Path.Combine(bot.FolderPath, ".claude", "agents");
         var subAgents = Directory.Exists(agentsDir)
             ? Directory.GetFiles(agentsDir, "*.md")
-                .Select(Path.GetFileNameWithoutExtension)
-                .Where(n => !string.IsNullOrEmpty(n))
-                .Select(n => n!)
-                .OrderBy(n => n)
+                .Select(file => new CapabilityInfo(
+                    Path.GetFileNameWithoutExtension(file),
+                    ExtractFrontmatterDescription(file)))
+                .Where(c => !string.IsNullOrEmpty(c.Name))
+                .OrderBy(c => c.Name)
                 .ToList()
-            : new List<string>();
+            : new List<CapabilityInfo>();
 
         return (agentDefinition, skills, subAgents);
+    }
+
+    /// <summary>Kiolvassa egy Markdown fájl YAML frontmatterjéből a "description:" mező értékét
+    /// (egysoros formátum, opcionális idézőjelekkel) — teljes YAML-parsert nem igényel, mert a
+    /// skill/agent fájlok konvencionálisan egyszerű, egysoros mezőket használnak.</summary>
+    private static string? ExtractFrontmatterDescription(string filePath)
+    {
+        if (!File.Exists(filePath))
+            return null;
+
+        var lines = File.ReadAllLines(filePath);
+        if (lines.Length == 0 || lines[0].Trim() != "---")
+            return null;
+
+        for (var i = 1; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (line.Trim() == "---")
+                break;
+
+            if (!line.StartsWith("description:", StringComparison.Ordinal))
+                continue;
+
+            var value = line["description:".Length..].Trim();
+            if (value.Length >= 2 && value[0] == '"' && value[^1] == '"')
+            {
+                value = value[1..^1];
+            }
+            return value.Length > 0 ? value : null;
+        }
+
+        return null;
     }
 
     public void SetAvatar(string id, string contentType, string base64Data)

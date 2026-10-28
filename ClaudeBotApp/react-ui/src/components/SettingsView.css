@@ -131,6 +131,11 @@
   flex-direction: column;
   align-items: center;
   overflow-y: auto;
+  /* explicit overflow-x: ha ezt üresen hagynánk, a CSS overflow-y: auto miatt a böngésző az
+     overflow-x-et is automatikusra számolná — ettől a láthatatlan (visibility: hidden), de
+     abszolút pozícionált info-tooltipek (amik keskeny ablaknál kilóghatnak a 260px szélességükkel
+     egy kis ikon köré középre igazítva) felesleges vízszintes görgetősávot okoztak. */
+  overflow-x: hidden;
   /* margin: a scrollbar (ami a border-boxon ül) így a panel szélétől is elválik, nem csak a
      tartalomtól — a padding önmagában csak content<->scrollbar térközt adna. */
   margin: 0 var(--sp-4) var(--sp-4) 0;
@@ -287,6 +292,14 @@
   color: var(--text-primary);
 }
 
+.settings-tools__subtitle {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
 .info-icon {
   position: relative;
   display: inline-flex;
@@ -303,7 +316,9 @@
 }
 
 .info-icon:hover .info-icon__tooltip,
-.info-icon:focus-visible .info-icon__tooltip {
+.info-icon:focus-visible .info-icon__tooltip,
+.tool-chip:hover .info-icon__tooltip,
+.tool-chip:focus-visible .info-icon__tooltip {
   opacity: 1;
   visibility: visible;
   transform: translate(-50%, 0);
@@ -347,6 +362,7 @@
 }
 
 .tool-chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
@@ -393,6 +409,11 @@
   border: 1px solid rgba(255, 255, 255, 0.11);
   color: var(--text-secondary);
   cursor: default;
+}
+
+.tool-chip--readonly:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 .settings-empty-note {

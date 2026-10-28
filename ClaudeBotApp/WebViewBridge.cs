@@ -152,16 +152,7 @@ public class WebViewBridge
                 case "getBotDetails":
                     if (root.TryGetProperty("botId", out var detailsBotIdProp))
                     {
-                        var detailsBotId = detailsBotIdProp.GetString() ?? "";
-                        var (agentDefinition, skills, subAgents) = _manager.GetBotDetails(detailsBotId);
-                        PostEvent(new
-                        {
-                            type = "botDetails",
-                            botId = detailsBotId,
-                            agentDefinition,
-                            skills,
-                            subAgents,
-                        });
+                        SendBotDetails(detailsBotIdProp.GetString() ?? "");
                     }
                     break;
 
@@ -272,6 +263,19 @@ public class WebViewBridge
         });
 
         PostEvent(new { type = "botLog", botId, lines });
+    }
+
+    private void SendBotDetails(string botId)
+    {
+        var (agentDefinition, skills, subAgents) = _manager.GetBotDetails(botId);
+        PostEvent(new
+        {
+            type = "botDetails",
+            botId,
+            agentDefinition,
+            skills = skills.Select(c => new { name = c.Name, description = c.Description }),
+            subAgents = subAgents.Select(c => new { name = c.Name, description = c.Description }),
+        });
     }
 
     private void OnLogReceived(BotSession bot, LogLine line)
