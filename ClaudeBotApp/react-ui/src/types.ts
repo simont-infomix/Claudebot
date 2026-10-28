@@ -1,6 +1,8 @@
 export type BotStatus = 'running' | 'stopped' | 'error';
 
-export type SettingsTab = 'settings' | 'definition' | 'capabilities' | 'tasks';
+export type SettingsTab = 'settings' | 'definition' | 'capabilities';
+
+export type MainTab = 'chat' | 'tasks';
 
 export interface ScheduledTask {
   id: string;

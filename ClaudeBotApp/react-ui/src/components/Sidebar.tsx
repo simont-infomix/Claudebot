@@ -9,6 +9,7 @@ interface Props {
   onSelect: (botId: string) => void;
   onAddClick: () => void;
   onOpenSettings: (botId: string, tab: SettingsTab) => void;
+  onOpenTasks: (botId: string) => void;
   onOpenWorkspaceFolder: (botId: string) => void;
   onOpenTerminal: (botId: string) => void;
   onRestart: (botId: string) => void;
@@ -20,6 +21,7 @@ export function Sidebar({
   onSelect,
   onAddClick,
   onOpenSettings,
+  onOpenTasks,
   onOpenWorkspaceFolder,
   onOpenTerminal,
   onRestart,
@@ -64,7 +66,8 @@ export function Sidebar({
         <BotContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          onOpenTab={(tab) => onOpenSettings(contextMenu.botId, tab)}
+          onOpenSettingsTab={(tab) => onOpenSettings(contextMenu.botId, tab)}
+          onOpenTasks={() => onOpenTasks(contextMenu.botId)}
           onOpenWorkspaceFolder={() => onOpenWorkspaceFolder(contextMenu.botId)}
           onOpenTerminal={() => onOpenTerminal(contextMenu.botId)}
           onRestart={() => onRestart(contextMenu.botId)}

@@ -15,31 +15,35 @@
   transform: translateX(0);
 }
 
-.settings-view__back {
+.settings-view__tabs-spacer {
+  flex: 1;
+}
+
+.settings-view__close {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
-  margin-right: var(--sp-2);
   background: none;
   border: none;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-size: 18px;
+  font-size: 22px;
+  line-height: 1;
   cursor: pointer;
   transition:
     color var(--duration-micro) ease,
     background var(--duration-micro) ease;
 }
 
-.settings-view__back:hover {
+.settings-view__close:hover {
   color: var(--text-primary);
   background: var(--bg-surface-hover);
 }
 
-.settings-view__back:focus-visible {
+.settings-view__close:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }

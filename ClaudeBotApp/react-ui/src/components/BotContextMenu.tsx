@@ -5,7 +5,8 @@ import './BotContextMenu.css';
 interface Props {
   x: number;
   y: number;
-  onOpenTab: (tab: SettingsTab) => void;
+  onOpenSettingsTab: (tab: SettingsTab) => void;
+  onOpenTasks: () => void;
   onOpenWorkspaceFolder: () => void;
   onOpenTerminal: () => void;
   onRestart: () => void;
@@ -15,7 +16,8 @@ interface Props {
 export function BotContextMenu({
   x,
   y,
-  onOpenTab,
+  onOpenSettingsTab,
+  onOpenTasks,
   onOpenWorkspaceFolder,
   onOpenTerminal,
   onRestart,
@@ -47,16 +49,16 @@ export function BotContextMenu({
 
   return (
     <div className="context-menu" style={{ left: x, top: y }} ref={menuRef}>
-      <button type="button" className="context-menu__item" onClick={() => handleSelect(() => onOpenTab('settings'))}>
+      <button type="button" className="context-menu__item" onClick={() => handleSelect(() => onOpenSettingsTab('settings'))}>
         Beállítások
       </button>
-      <button type="button" className="context-menu__item" onClick={() => handleSelect(() => onOpenTab('definition'))}>
+      <button type="button" className="context-menu__item" onClick={() => handleSelect(() => onOpenSettingsTab('definition'))}>
         Bot definíció
       </button>
-      <button type="button" className="context-menu__item" onClick={() => handleSelect(() => onOpenTab('capabilities'))}>
+      <button type="button" className="context-menu__item" onClick={() => handleSelect(() => onOpenSettingsTab('capabilities'))}>
         Képességek
       </button>
-      <button type="button" className="context-menu__item" onClick={() => handleSelect(() => onOpenTab('tasks'))}>
+      <button type="button" className="context-menu__item" onClick={() => handleSelect(onOpenTasks)}>
         Feladatok
       </button>
       <div className="context-menu__divider" />

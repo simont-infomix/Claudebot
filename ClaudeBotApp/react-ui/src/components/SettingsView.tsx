@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
-import type { Bot, BotDetails, BotSettingsDraft, ScheduledTask, SettingsTab } from '../types';
+import type { Bot, BotDetails, BotSettingsDraft, SettingsTab } from '../types';
 import { Select } from './Select';
 import { ConfirmDialog } from './ConfirmDialog';
 import './SettingsView.css';
@@ -21,7 +21,6 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'settings', label: 'Beállítások' },
   { id: 'definition', label: 'Bot definíció' },
   { id: 'capabilities', label: 'Képességek' },
-  { id: 'tasks', label: 'Feladatok' },
 ];
 
 // Gyors hozzáadás gombok: a leggyakrabban használt MCP-szerverek wildcard-mintái. Nem egy élő
@@ -126,7 +125,6 @@ export function SettingsView({
   const [draft, setDraft] = useState<BotSettingsDraft | null>(bot ? draftFromBot(bot) : null);
   const [isEditingName, setIsEditingName] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
-  const [newTask, setNewTask] = useState({ name: '', schedule: '', prompt: '' });
 
   // Csak bot-váltáskor (más id) töltjük újra a draftot a bot aktuális állapotából — így egy
   // élő botStatusChanged/botList frissítés nem írja felül a félkész, még nem mentett szerkesztést.
@@ -134,7 +132,6 @@ export function SettingsView({
     setDraft(bot ? draftFromBot(bot) : null);
     setIsEditingName(false);
     setShowCloseConfirm(false);
-    setNewTask({ name: '', schedule: '', prompt: '' });
   }, [bot?.id]);
 
   useEffect(() => {
@@ -189,23 +186,6 @@ export function SettingsView({
     });
   }
 
-  function addScheduledTask() {
-    const name = newTask.name.trim();
-    if (!name) return;
-    const task: ScheduledTask = {
-      id: crypto.randomUUID(),
-      name,
-      schedule: newTask.schedule.trim(),
-      prompt: newTask.prompt.trim(),
-    };
-    updateDraft({ scheduledTasks: [...draft!.scheduledTasks, task] });
-    setNewTask({ name: '', schedule: '', prompt: '' });
-  }
-
-  function removeScheduledTask(id: string) {
-    updateDraft({ scheduledTasks: draft!.scheduledTasks.filter((t) => t.id !== id) });
-  }
-
   function handleNameKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') {
       setIsEditingName(false);
@@ -256,9 +236,6 @@ export function SettingsView({
       )}
 
       <div className="settings-view__tabs">
-        <button type="button" className="settings-view__back" onClick={requestClose} aria-label="Vissza">
-          ←
-        </button>
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -269,6 +246,10 @@ export function SettingsView({
             {t.label}
           </button>
         ))}
+        <span className="settings-view__tabs-spacer" />
+        <button type="button" className="settings-view__close" onClick={requestClose} aria-label="Bezárás">
+          ×
+        </button>
       </div>
 
       <div className="settings-view__body">
@@ -482,68 +463,6 @@ export function SettingsView({
           </>
         )}
 
-        {activeTab === 'tasks' && (
-          <div className="settings-tasks">
-            <div className="settings-tools__header">
-              <span className="settings-tools__title">Ütemezett feladatok</span>
-              <span className="info-icon" tabIndex={0}>
-                ⓘ
-                <span className="info-icon__tooltip">
-                  Ez egyelőre csak a feladat-definíciók tárolása — az automatikus, ütemezés
-                  szerinti futtatás (scheduler) még nincs megvalósítva.
-                </span>
-              </span>
-            </div>
-
-            {draft.scheduledTasks.length === 0 ? (
-              <span className="settings-empty-note">Nincs még ütemezett feladat.</span>
-            ) : (
-              <div className="task-list">
-                {draft.scheduledTasks.map((task) => (
-                  <div key={task.id} className="task-card">
-                    <div className="task-card__header">
-                      <span className="task-card__name">{task.name}</span>
-                      <button
-                        type="button"
-                        className="task-card__remove"
-                        onClick={() => removeScheduledTask(task.id)}
-                        aria-label={`${task.name} törlése`}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    {task.schedule && <div className="task-card__schedule">{task.schedule}</div>}
-                    {task.prompt && <div className="task-card__prompt">{task.prompt}</div>}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="task-form">
-              <input
-                className="task-form__input"
-                placeholder="Feladat neve"
-                value={newTask.name}
-                onChange={(e) => setNewTask((t) => ({ ...t, name: e.target.value }))}
-              />
-              <input
-                className="task-form__input"
-                placeholder="Ütemezés (pl. minden hétköznap 8:00)"
-                value={newTask.schedule}
-                onChange={(e) => setNewTask((t) => ({ ...t, schedule: e.target.value }))}
-              />
-              <textarea
-                className="task-form__textarea"
-                placeholder="Prompt, amit a feladat elindulásakor kapjon az agent"
-                value={newTask.prompt}
-                onChange={(e) => setNewTask((t) => ({ ...t, prompt: e.target.value }))}
-              />
-              <button type="button" className="task-form__add" onClick={addScheduledTask}>
-                Feladat hozzáadása
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
