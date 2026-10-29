@@ -235,6 +235,30 @@ public class BotSession
         }
     }
 
+    /// <summary>
+    /// Azonnali, teljes leállítás a bot törléséhez: a claude.exe-t és a GYERMEKFOLYAMATAIT is
+    /// (MCP-szerverek) kilövi, majd megvárja a kilépést. A sima <see cref="Stop"/> csak a
+    /// stdin lezárásával kér kilépést, és a gyermekek ettől még másodpercekig életben
+    /// maradhatnak — mivel a munkakönyvtáruk a bot mappája, addig az nem törölhető.
+    /// </summary>
+    public void StopForDeletion()
+    {
+        if (_process == null)
+            return;
+
+        try
+        {
+            if (!_process.HasExited)
+                _process.Kill(entireProcessTree: true);
+
+            _process.WaitForExit(5000);
+        }
+        catch
+        {
+            // a leállítás közbeni hibák nem akadályozhatják a törlést
+        }
+    }
+
     public void Restart()
     {
         Stop();

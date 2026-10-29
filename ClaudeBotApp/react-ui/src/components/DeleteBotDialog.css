@@ -1,0 +1,119 @@
+.delete-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Aurora Modal szint — a dialógusok fix 360px szélesek (ld. ui-design-guideline). */
+.delete-dialog {
+  width: 360px;
+  background: rgba(13, 18, 32, 0.88);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid rgba(255, 83, 112, 0.3);
+  border-radius: var(--radius-xl);
+  padding: var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.delete-dialog__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.delete-dialog__warning {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.delete-dialog__warning strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.delete-dialog__label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.delete-dialog__name {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  /* a név kijelölhető, de nem "véletlenül bemásolható" — a begépelés a lényeg */
+  user-select: none;
+}
+
+.delete-dialog__input {
+  padding: var(--sp-3);
+  font-size: 14px;
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+}
+
+.delete-dialog__input:focus {
+  outline: none;
+  border-color: rgba(255, 83, 112, 0.6);
+  box-shadow: 0 0 0 3px rgba(255, 83, 112, 0.15);
+}
+
+.delete-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+.delete-dialog__actions button {
+  height: 40px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    background var(--duration-micro) ease,
+    filter var(--duration-micro) ease;
+}
+
+.delete-dialog__cancel {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  color: var(--text-primary);
+}
+
+.delete-dialog__cancel:hover {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.delete-dialog__confirm {
+  background: rgba(255, 83, 112, 0.15);
+  border: 1px solid rgba(255, 83, 112, 0.5);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.delete-dialog__confirm:hover:not(:disabled) {
+  background: rgba(255, 83, 112, 0.25);
+}
+
+.delete-dialog__confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.delete-dialog__actions button:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
+}

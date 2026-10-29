@@ -99,6 +99,17 @@ public class WebViewBridge
                     }
                     break;
 
+                case "deleteBot":
+                    if (root.TryGetProperty("botId", out var deleteIdProp))
+                    {
+                        var (deleted, deleteError) = _manager.DeleteBot(deleteIdProp.GetString() ?? "");
+                        if (!deleted)
+                        {
+                            PostEvent(new { type = "error", message = deleteError });
+                        }
+                    }
+                    break;
+
                 case "restartBot":
                     if (root.TryGetProperty("botId", out var restartIdProp))
                     {

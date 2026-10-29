@@ -444,3 +444,45 @@
   word-break: break-word;
 }
 
+
+/* Veszélyzóna: vizuálisan elkülönül a többi beállítástól, hogy ne lehessen véletlenül
+   belefutni a listát görgetve. */
+.settings-danger {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: var(--sp-8);
+  padding-top: var(--sp-4);
+  border-top: 1px solid rgba(255, 83, 112, 0.2);
+}
+
+.settings-danger__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.settings-danger__button {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 var(--sp-3);
+  background: transparent;
+  border: 1px solid rgba(255, 83, 112, 0.5);
+  border-radius: var(--radius-md);
+  color: var(--danger);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--duration-micro) ease;
+}
+
+.settings-danger__button:hover {
+  background: rgba(255, 83, 112, 0.12);
+}
+
+.settings-danger__button:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}

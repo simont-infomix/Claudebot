@@ -15,6 +15,7 @@ interface Props {
   onSetAvatar: (contentType: string, dataBase64: string) => void;
   onSave: (settings: BotSettingsDraft) => void;
   onDirtyChange: (dirty: boolean) => void;
+  onRequestDelete: () => void;
 }
 
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -117,6 +118,7 @@ export function SettingsView({
   onSetAvatar,
   onSave,
   onDirtyChange,
+  onRequestDelete,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -333,6 +335,15 @@ export function SettingsView({
                 onChange={(v) => updateDraft({ permissionMode: v })}
                 options={PERMISSION_MODE_OPTIONS}
               />
+            </div>
+
+            <div className="settings-danger">
+              <span className="settings-danger__label">
+                A bot és teljes munkamappája véglegesen törlődik.
+              </span>
+              <button type="button" className="settings-danger__button" onClick={onRequestDelete}>
+                Bot törlése
+              </button>
             </div>
           </>
         )}

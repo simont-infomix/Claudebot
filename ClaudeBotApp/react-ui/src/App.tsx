@@ -17,6 +17,7 @@ import { TaskEditorView } from './components/TaskEditorView';
 import { SettingsView } from './components/SettingsView';
 import { NewBotDialog } from './components/NewBotDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { DeleteBotDialog } from './components/DeleteBotDialog';
 import './App.css';
 
 export default function App() {
@@ -35,6 +36,11 @@ export default function App() {
   const [botDetails, setBotDetails] = useState<BotDetails | null>(null);
   const [taskEditorOpen, setTaskEditorOpen] = useState(false);
   const [taskBeingEdited, setTaskBeingEdited] = useState<ScheduledTask | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  /** Törlésre küldött bot azonosítója — amíg él, a Settings lap nyitva marad, hogy egy
+   *  esetleges hibaüzenet látható legyen. Az értéket csak a funkcionális frissítőkön belül
+   *  olvassuk (a botList esemény kezelésekor), ezért itt nem kötjük le. */
+  const [, setPendingDeleteBotId] = useState<string | null>(null);
 
   // A hosztnak (WinForms) jelezzük a mentetlen módosítást, hogy alkalmazás-bezáráskor rá
   // tudjon kérdezni. Csak a Settings lapnak van piszkozat-állapota — a Feladatok nézet minden
@@ -53,7 +59,25 @@ export default function App() {
         case 'botList': {
           setBots(event.bots);
           setDialogOpen(false);
-          setSelectedBotId((current) => current ?? event.bots[0]?.id ?? null);
+
+          // Ha a törlésre küldött bot eltűnt a listából, a törlés sikerült: ekkor zárjuk a
+          // Settings lapot. (Hiba esetén a bot a listában marad, a lap nyitva, és ott látszik
+          // a hibaüzenet.)
+          setPendingDeleteBotId((pending) => {
+            if (pending != null && !event.bots.some((b) => b.id === pending)) {
+              setSettingsOpen(false);
+              setSettingsDirty(false);
+              return null;
+            }
+            return pending;
+          });
+          // Ha a kijelölt bot eltűnt a listából (pl. törölték), a kijelölés nem maradhat rajta —
+          // különben egy már nem létező botra mutatnának a nézetek.
+          setSelectedBotId((current) =>
+            current != null && event.bots.some((b) => b.id === current)
+              ? current
+              : event.bots[0]?.id ?? null,
+          );
           break;
         }
         case 'botLog':
@@ -90,6 +114,8 @@ export default function App() {
           setDialogError(event.message);
           setSettingsError(event.message);
           setTasksError(event.message);
+          // A törlés meghiúsult — a bot megmarad, a Settings lap nyitva marad a hibaüzenettel.
+          setPendingDeleteBotId(null);
           break;
       }
     });
@@ -262,6 +288,7 @@ export default function App() {
             selectedBot && bridge.setBotAvatar(selectedBot.id, contentType, dataBase64)
           }
           onDirtyChange={setSettingsDirty}
+          onRequestDelete={() => setDeleteDialogOpen(true)}
           onSave={(settings: BotSettingsDraft) => {
             setSettingsError(null);
             // A feladatlistát a bot friss állapotából adjuk át — a Settings lap nem birtokolja.
@@ -274,6 +301,20 @@ export default function App() {
           error={dialogError}
           onSubmit={handleCreateBot}
           onClose={() => setDialogOpen(false)}
+        />
+      )}
+      {deleteDialogOpen && selectedBot && (
+        <DeleteBotDialog
+          botName={selectedBot.name}
+          onClose={() => setDeleteDialogOpen(false)}
+          onConfirm={() => {
+            setDeleteDialogOpen(false);
+            setSettingsError(null);
+            // A Settings lapot NEM zárjuk be azonnal: ha a törlés meghiúsul, a hibaüzenet itt
+            // jelenik meg. Sikeres törléskor a bot eltűnése zárja be (ld. botList kezelése).
+            setPendingDeleteBotId(selectedBot.id);
+            bridge.deleteBot(selectedBot.id);
+          }}
         />
       )}
       {exitConfirmOpen && (

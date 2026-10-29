@@ -45,6 +45,10 @@ class BridgeClient {
     this.send({ type: 'restartBot', botId });
   }
 
+  deleteBot(botId: string): void {
+    this.send({ type: 'deleteBot', botId });
+  }
+
   setBotAvatar(botId: string, contentType: string, dataBase64: string): void {
     this.send({ type: 'setBotAvatar', botId, contentType, dataBase64 });
   }

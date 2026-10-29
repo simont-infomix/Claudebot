@@ -72,6 +72,74 @@ public class BotSessionManager
         FindBot(id)?.Restart();
     }
 
+    /// <summary>
+    /// Véglegesen törli a botot: leállítja a session-jét, majd törli a teljes workspace-mappáját.
+    /// Visszafordíthatatlan — a hívó felelőssége a megerősítés bekérése (UC-016).
+    ///
+    /// A sorrend kötött: a claude.exe munkakönyvtára maga a bot mappája, és Windows alatt egy
+    /// futó folyamat aktuális könyvtára zárolja azt — ezért előbb a folyamatot kell leállítani.
+    /// A listából csak sikeres törlés után vesszük ki, hogy hiba esetén ne maradjon "eltűnt, de
+    /// valójában létező" bot.
+    /// </summary>
+    public (bool success, string? error) DeleteBot(string id)
+    {
+        var bot = FindBot(id);
+        if (bot == null)
+            return (false, "A bot nem található.");
+
+        bot.StopForDeletion();
+
+        if (!TryDeleteDirectory(bot.FolderPath, out var error))
+        {
+            // A leggyakoribb ok, hogy valami kívülről fogja a mappát — tipikusan a bothoz
+            // nyitott terminál (ld. BUG-001: az nem áll le az apppal együtt). Nem próbálunk
+            // trükközni (átnevezés, félretevés): egyértelműen megmondjuk, mit kell kézzel
+            // tennie a felhasználónak, a bot pedig a listában marad.
+            return (false,
+                $"A(z) \"{bot.Name}\" bot mappáját nem sikerült törölni, mert egy másik " +
+                $"program használja. Zárj be minden hozzá tartozó ablakot (pl. terminált), " +
+                $"töröld manuálisan a mappát ({bot.FolderPath}), majd indítsd újra a programot. " +
+                $"(Részletek: {error})");
+        }
+
+        _bots.Remove(bot);
+        BotListChanged?.Invoke();
+        return (true, null);
+    }
+
+    /// <summary>
+    /// A folyamatfa kilövése után a mappa méréseink szerint ~200 ms-on belül törölhető, de a
+    /// fogók felszabadulása nem azonnali és nem garantált idejű — ezért néhány másodpercig
+    /// újrapróbálkozunk, mielőtt hibát jelentenénk. (Finom leállítással, a gyermek MCP-folyamatok
+    /// kilövése nélkül ez több másodperc is lehet, ld. BotSession.StopForDeletion.)
+    /// </summary>
+    private static bool TryDeleteDirectory(string path, out string? error)
+    {
+        const int attempts = 10;
+        error = null;
+
+        for (var i = 0; i < attempts; i++)
+        {
+            try
+            {
+                if (!Directory.Exists(path))
+                    return true;
+
+                Directory.Delete(path, recursive: true);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+
+                if (i < attempts - 1)
+                    Thread.Sleep(300);
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>A bot konfigurációjának lemezre mentése és a felület értesítése. A scheduler
     /// hívja, miután egy feladat futási állapota (utolsó/következő futás) megváltozott.</summary>
     public void PersistBot(BotSession bot)
@@ -436,6 +504,12 @@ public class BotSessionManager
 
     private static void SaveMeta(BotSession bot)
     {
+        // Törölt bot mappájába nem írunk vissza. Ez akkor fordulhat elő, ha a törlés pillanatában
+        // még futott egy feladata: a befejezése háttérszálon érkezik, és mentést kezdeményezne
+        // egy már nem létező mappába (ld. DeleteBot, BotTaskScheduler.OnTurnCompleted).
+        if (!Directory.Exists(bot.FolderPath))
+            return;
+
         var meta = new BotMeta
         {
             DisplayName = bot.DisplayName,

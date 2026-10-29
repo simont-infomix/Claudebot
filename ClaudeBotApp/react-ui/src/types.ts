@@ -104,6 +104,7 @@ export type HostRequest =
   | { type: 'openTerminal'; botId: string }
   | { type: 'openWorkspaceFolder'; botId: string }
   | { type: 'restartBot'; botId: string }
+  | { type: 'deleteBot'; botId: string }
   | { type: 'setBotAvatar'; botId: string; contentType: string; dataBase64: string }
   | ({ type: 'saveSettings'; botId: string; scheduledTasks: ScheduledTask[] } & BotSettingsDraft)
   | { type: 'setSettingsDirty'; dirty: boolean }
