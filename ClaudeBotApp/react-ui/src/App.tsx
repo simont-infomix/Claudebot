@@ -53,6 +53,15 @@ export default function App() {
     bridge.getBots();
   }, []);
 
+  // A hosztnak jelezzük, melyik bot csevegése van ténylegesen a képernyőn — ebből (az ablak
+  // láthatóságával együtt, amit a C# oldal követ) dönti el, hogy egy új bot-üzenet "látottnak"
+  // számít-e (UC-017). A Settings lap és a feladat-szerkesztő a teljes tartalomterületet
+  // lefedi, ezért amíg azok nyitva vannak, nincs aktívan megtekintett csevegés.
+  useEffect(() => {
+    const viewedBotId = !settingsOpen && !taskEditorOpen && mainTab === 'chat' ? selectedBotId : null;
+    bridge.setViewedBot(viewedBotId);
+  }, [selectedBotId, mainTab, settingsOpen, taskEditorOpen]);
+
   useEffect(() => {
     const unsubscribe = bridge.on((event) => {
       switch (event.type) {

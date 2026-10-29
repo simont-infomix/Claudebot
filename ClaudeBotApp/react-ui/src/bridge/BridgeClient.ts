@@ -76,6 +76,10 @@ class BridgeClient {
     this.send({ type: 'runTask', botId, taskId });
   }
 
+  setViewedBot(botId: string | null): void {
+    this.send({ type: 'setViewedBot', botId });
+  }
+
   sendPrompt(botId: string, text: string, attachments: EncodedAttachment[] = []): void {
     this.send({ type: 'sendPrompt', botId, text, attachments });
   }

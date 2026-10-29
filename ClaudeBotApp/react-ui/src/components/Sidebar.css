@@ -95,6 +95,23 @@
   background: var(--danger);
 }
 
+/* Olvasatlan bot-üzenet jelölője (UC-017) — a jobb FELSŐ sarokban, hogy ne ütközzön a
+   jobb alsó sarokban élő státusz-pötty jelentésével. Piros (ugyanaz a danger-szín, mint a
+   hiba-állapoté), mert ez a megszokott "figyelj ide" jelentésű szín (Teams, iOS/Android
+   badge-konvenció) — a hiba-pöttytől a POZÍCIÓ és a glow különbözteti meg, nem a szín.
+   Statikus (nem pulzál), hogy ne versengjen vizuálisan a "fut" állapot pulzáló glow-jával. */
+.unread-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--danger);
+  border: 1px solid var(--bg-base);
+  box-shadow: 0 0 6px rgba(255, 83, 112, 0.6);
+}
+
 @keyframes glow-pulse {
   0%,
   100% {

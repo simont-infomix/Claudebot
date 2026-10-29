@@ -43,6 +43,12 @@ public class BotSession
     public List<LogLine> AccumulatedLog { get; } = new();
     public BotStatus Status { get; private set; } = BotStatus.Stopped;
 
+    /// <summary>Van-e olyan bot-válasz vagy hiba, amit a felhasználó még nem látott (UC-017).
+    /// Kizárólag memóriában él — nem perzisztálódik, app-újraindítás után minden jelölő törlődik.
+    /// Azt, hogy mikor számít egy üzenet "látottnak", a <see cref="WebViewBridge"/> dönti el (az
+    /// ismeri az aktív nézetet és az ablak láthatóságát), ez a property csak az állapotot tárolja.</summary>
+    public bool HasUnreadMessage { get; private set; }
+
     private Process? _process;
 
     public event Action<LogLine>? LogReceived;
@@ -263,6 +269,28 @@ public class BotSession
     {
         Stop();
         Start();
+    }
+
+    /// <summary>true-ra állítja a jelzőt, ha korábban false volt. A visszatérési érték mondja meg
+    /// a hívónak, hogy ténylegesen VÁLTOZOTT-e az állapot — erre épül, hogy a feliratkozóknak
+    /// (bot-lista a sidebarnak, tálcaikon) csak akkor kell újra értesülniük.</summary>
+    public bool MarkUnread()
+    {
+        if (HasUnreadMessage)
+            return false;
+
+        HasUnreadMessage = true;
+        return true;
+    }
+
+    /// <summary>Lásd <see cref="MarkUnread"/> — ugyanaz a "csak változáskor jelez vissza" minta.</summary>
+    public bool MarkSeen()
+    {
+        if (!HasUnreadMessage)
+            return false;
+
+        HasUnreadMessage = false;
+        return true;
     }
 
     private void OnOutputDataReceived(object? sender, DataReceivedEventArgs e)

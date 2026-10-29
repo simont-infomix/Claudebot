@@ -2,9 +2,9 @@
 id: ui-design-guideline
 title: UI design szabályzat
 type: ui-design-guideline
-version: 0.9.0
+version: 0.10.0
 created: 2026-10-15
-updated: 2026-10-19
+updated: 2026-10-29
 references:
   - architecture-c3-react-ui
 ---
@@ -79,6 +79,7 @@ A Content a rendelkezésre álló teljes maradék szélességet kapja (`flex: 1`
 | Mező-típus | Vizuális konvenció |
 |---|---|
 | Bot-állapot (fut / leállt / hiba) | 10px átmérőjű pötty az avatar jobb alsó sarkában: `rgba(61,255,154,1)` (Boreal Green) = fut, enyhe glow-pulse animációval (2s ease-in-out infinite, opacity 0.4→0.9); `rgba(139,155,187,1)` = leállt; `rgba(255,83,112,1)` = hiba, glow nélkül, hogy megkülönböztethető legyen a futó állapottól. |
+| Olvasatlan bot-üzenet (UC-017) | 10px átmérőjű pötty az avatar jobb **felső** sarkában (a jobb alsó a Bot-állapot pöttyéé, így a kettő nem ütközik): Arctic Teal (`rgba(0,232,200,1)`), enyhe glow-val (`0 0 6px rgba(0,232,200,0.6)`), 1px `rgba(8,12,20,1)` kerettel a kontraszthoz. Statikus, nem pulzál — a futó-állapot glow-pulse-ával egyszerre túl nyugtalan lenne a sidebar. Nincs számláló, csak a tény jelzése. Ugyanez a pötty jelenik meg (a tálcaikon méretéhez illesztve) a tálcaikon jobb felső sarkában is, ha legalább egy botnak van olvasatlan üzenete. |
 | Chat-üzenet típusa (user / assistant válasz / rendszerinfo / hiba-stderr) | ld. Chat-buborékok alszekció — ez négy, vizuálisan megkülönböztetett típus, nem csak színezett szövegsor. |
 
 **Chat-buborékok:** a beszélgetés sor-alapú, minden sor egy `chat-row` (igazítás: user → jobbra, assistant/info/error → balra kivéve info/error, ami középre), benne egy `chat-bubble` (max-width 70%, ≥1400px ablaknál abszolút felső korlát 640px):

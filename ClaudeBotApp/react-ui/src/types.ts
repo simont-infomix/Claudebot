@@ -59,6 +59,9 @@ export interface Bot {
   effort: string | null;
   permissionMode: string;
   scheduledTasks: ScheduledTask[];
+  /** Van-e olyan bot-válasz vagy hiba, amit a felhasználó még nem látott (UC-017). Csak
+   *  jelzés, nem számláló. */
+  hasUnreadMessage: boolean;
 }
 
 /**
@@ -111,6 +114,8 @@ export type HostRequest =
   | { type: 'respondToExitConfirm'; confirmed: boolean }
   | { type: 'getBotDetails'; botId: string }
   | { type: 'runTask'; botId: string; taskId: string }
+  /** Melyik bot csevegése van ténylegesen a képernyőn — null, ha egyik sincs (UC-017). */
+  | { type: 'setViewedBot'; botId: string | null }
   | { type: 'sendPrompt'; botId: string; text: string; attachments: EncodedAttachment[] };
 
 export type HostEvent =

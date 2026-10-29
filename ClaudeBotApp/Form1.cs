@@ -17,6 +17,21 @@ public partial class Form1 : Form
     /// <summary>A mentetlen beállításokra vonatkozó kérdésre a felhasználó igennel válaszolt.</summary>
     private bool _unsavedChangesConfirmed;
 
+    /// <summary>A tálcaikon két változata (UC-017): az alap ikon, és egy jobb felső sarokban
+    /// jelölőpontos változat, ami akkor jelenik meg, ha legalább egy botnak van olvasatlan
+    /// üzenete. Az <see cref="ApplyAppIcon"/> tölti be, az <see cref="UpdateTrayNotificationState"/>
+    /// vált közöttük.</summary>
+    private Icon? _trayIconNormal;
+    private Icon? _trayIconNotify;
+
+    /// <summary>Második, a NotifyIcon-tól FÜGGETLEN jelzési csatorna (UC-017): a taskbar-gomb
+    /// overlay-jelvénye, ugyanaz a mechanizmus, mint amit pl. a Teams használ. Azért kell a
+    /// NotifyIcon-badge MELLÉ, nem helyette, mert a Windows az új tálcaikonokat alapértelmezetten
+    /// a rejtett ("^") ikonok közé teszi, ahol a jelölő változása könnyen észrevétlen marad —
+    /// a taskbar-gomb viszont (amíg az ablak nincs a tálcára rejtve) mindig látható.</summary>
+    private readonly TaskbarBadge _taskbarBadge = new();
+    private Icon? _taskbarOverlayIcon;
+
     public Form1()
     {
         InitializeComponent();
@@ -47,7 +62,87 @@ public partial class Form1 : Form
             return;
 
         Icon = new Icon(stream);
-        trayIcon.Icon = new Icon(Icon, SystemInformation.SmallIconSize);
+        _trayIconNormal = new Icon(Icon, SystemInformation.SmallIconSize);
+        _trayIconNotify = BuildNotificationIcon(_trayIconNormal);
+        trayIcon.Icon = _trayIconNormal;
+        _taskbarOverlayIcon = BuildOverlayDotIcon();
+    }
+
+    /// <summary>A megszokott "figyelj ide" jelentésű piros (ld. ui-design-guideline — Danger/
+    /// Hiba szín). Ugyanaz a szín, mint a hiba-állapot pöttyéé — ott a pozíció (jobb alsó, nincs
+    /// glow) különbözteti meg az olvasatlan-jelölőtől (jobb felső, glow-val).</summary>
+    private static readonly Color NotificationColor = Color.FromArgb(255, 83, 112);
+
+    /// <summary>A tálcaikon jobb felső sarkába rajzol egy jelölőpontot (UC-017). A bot-státusz
+    /// pöttye (ld. ui-design-guideline) a jobb ALSÓ sarkot foglalja el, ezért ez nem ütközik vele.
+    /// </summary>
+    private static Icon BuildNotificationIcon(Icon baseIcon)
+    {
+        using var bitmap = baseIcon.ToBitmap();
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        var size = bitmap.Width;
+        var dotDiameter = Math.Max(5, (int)(size * 0.42));
+        var dotRect = new Rectangle(size - dotDiameter, 0, dotDiameter, dotDiameter);
+
+        // Vékony sötét keret a jelölőpont körül, hogy világos tálca-témán is kontrasztos maradjon
+        // — ugyanaz a minta, mint a bot-státusz pöttyé (border: var(--bg-base)).
+        using (var borderBrush = new SolidBrush(Color.FromArgb(8, 12, 20)))
+            graphics.FillEllipse(borderBrush, Rectangle.Inflate(dotRect, 1, 1));
+
+        using (var dotBrush = new SolidBrush(NotificationColor))
+            graphics.FillEllipse(dotBrush, dotRect);
+
+        // Az Icon.FromHandle által visszaadott objektum nem birtokolja a GDI-handle-t (azt
+        // DestroyIcon-nal kellene felszabadítani) — ez a folyamat teljes élettartamára szóló,
+        // egyszeri (nem ismétlődő) handle, amit az OS a kilépéskor úgyis felszabadít.
+        return Icon.FromHandle(bitmap.GetHicon());
+    }
+
+    /// <summary>A taskbar-gomb overlay-jelvénye (UC-017, ld. TaskbarBadge) — ÖNÁLLÓ, átlátszó
+    /// hátterű pötty-ikon, nem a robot-ikonra rakott kompozit. A Windows maga komponálja rá a
+    /// tálca-gomb sarkára, ezért itt nem kell (és nem is szabad) a teljes robotikont átrajzolni.
+    /// </summary>
+    private static Icon BuildOverlayDotIcon()
+    {
+        const int size = 16;
+        using var bitmap = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        graphics.Clear(Color.Transparent);
+
+        var outerRect = new Rectangle(1, 1, size - 2, size - 2);
+        using (var borderBrush = new SolidBrush(Color.FromArgb(8, 12, 20)))
+            graphics.FillEllipse(borderBrush, outerRect);
+
+        var innerRect = Rectangle.Inflate(outerRect, -1, -1);
+        using (var dotBrush = new SolidBrush(NotificationColor))
+            graphics.FillEllipse(dotBrush, innerRect);
+
+        return Icon.FromHandle(bitmap.GetHicon());
+    }
+
+    /// <summary>Legalább egy botnak van-e olvasatlan üzenete (UC-017) — ez dönti el, melyik
+    /// tálcaikon-változat és tooltip-szöveg látszik. A WebViewBridge.UnreadStateChanged a
+    /// bot-folyamat kimenetét olvasó háttérszálon is kiváltódhat, ezért a trayIcon (UI-elem)
+    /// módosítása előtt a UI-szálra kell marshalolni.</summary>
+    private void UpdateTrayNotificationState()
+    {
+        if (InvokeRequired)
+        {
+            BeginInvoke(UpdateTrayNotificationState);
+            return;
+        }
+
+        var hasUnread = _manager?.Bots.Any(b => b.HasUnreadMessage) ?? false;
+        trayIcon.Icon = hasUnread ? _trayIconNotify : _trayIconNormal;
+        trayIcon.Text = hasUnread ? "ClaudeBot — olvasatlan üzenet" : "ClaudeBot";
+
+        _taskbarBadge.SetOverlay(
+            Handle,
+            hasUnread ? _taskbarOverlayIcon : null,
+            hasUnread ? "Olvasatlan üzenet" : "");
     }
 
     private async void Form1_Load(object sender, EventArgs e)
@@ -66,6 +161,7 @@ public partial class Form1 : Form
         _scheduler = new BotTaskScheduler(_manager);
         _bridge = new WebViewBridge(webView, _manager, _scheduler);
         _bridge.ExitConfirmResponse += OnExitConfirmResponse;
+        _bridge.UnreadStateChanged += UpdateTrayNotificationState;
         _manager.LoadExisting();
         _manager.InitializeTaskSchedules();
         _scheduler.Start();
@@ -123,6 +219,7 @@ public partial class Form1 : Form
     private void HideToTray()
     {
         Hide();
+        _bridge?.SetWindowVisible(false);
     }
 
     private void RestoreFromTray()
@@ -133,6 +230,11 @@ public partial class Form1 : Form
             WindowState = FormWindowState.Normal;
 
         Activate();
+        _bridge?.SetWindowVisible(true);
+
+        // A taskbar-gomb az ablak elrejtésekor eltűnik, visszaállításkor újra létrejön — az
+        // overlay-jelvényt ezért újra alkalmazni kell rá, a korábbi állapot nem öröklődik át.
+        UpdateTrayNotificationState();
     }
 
     private void Form1_FormClosing(object sender, FormClosingEventArgs e)

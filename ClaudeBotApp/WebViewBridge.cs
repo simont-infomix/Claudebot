@@ -20,6 +20,20 @@ public class WebViewBridge
     /// WinForms MessageBox helyett, majd a döntést itt jelzi vissza.</summary>
     public event Action<bool>? ExitConfirmResponse;
 
+    /// <summary>Legalább egy bot olvasatlan-jelzője változott — a Form1 ebből frissíti a
+    /// tálcaikont (UC-017). FIGYELEM: a bot-folyamat kimenetét olvasó háttérszálon is kiváltódhat.</summary>
+    public event Action? UnreadStateChanged;
+
+    /// <summary>Melyik bot csevegése van ténylegesen a képernyőn — a React oldal jelzi
+    /// (lásd "setViewedBot"). Null, ha semmilyen bot csevegése nincs aktívan megjelenítve
+    /// (pl. a Feladatok tabon vagy a Settings lapon áll a felhasználó).</summary>
+    private string? _viewedBotId;
+
+    /// <summary>Az ablak látható-e (nincs a tálcára rejtve) — a Form1 frissíti
+    /// <see cref="SetWindowVisible"/>-on keresztül. Egy üzenet csak akkor számít látottnak, ha
+    /// EGYSZERRE ez igaz, ÉS a bot csevegése az aktív nézet (UC-017).</summary>
+    private bool _isWindowVisible = true;
+
     public WebViewBridge(WebView2 webView, BotSessionManager manager, BotTaskScheduler scheduler)
     {
         _webView = webView;
@@ -35,6 +49,32 @@ public class WebViewBridge
     public void RequestExitConfirmation()
     {
         PostEvent(new { type = "confirmExit" });
+    }
+
+    /// <summary>A Form1 hívja az ablak elrejtése/visszaállítása után (ADR-0003 — tálcára rejtés).
+    /// Ha az ablak most válik láthatóvá, és épp van aktívan megtekintett bot, annak olvasatlan
+    /// jelzőjét is törli — a felhasználó a visszaállítás pillanatában "látja" a csevegést.</summary>
+    public void SetWindowVisible(bool visible)
+    {
+        _isWindowVisible = visible;
+
+        if (visible)
+            MarkViewedBotSeen();
+    }
+
+    /// <summary>Ha van aktívan megtekintett bot és az ablak látható, törli annak olvasatlan
+    /// jelzőjét, és értesíti a feliratkozókat, ha ez ténylegesen változást jelentett.</summary>
+    private void MarkViewedBotSeen()
+    {
+        if (!_isWindowVisible || _viewedBotId == null)
+            return;
+
+        var bot = _manager.FindBot(_viewedBotId);
+        if (bot != null && bot.MarkSeen())
+        {
+            SendBotList();
+            UnreadStateChanged?.Invoke();
+        }
     }
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -170,6 +210,13 @@ public class WebViewBridge
                     }
                     break;
 
+                case "setViewedBot":
+                    _viewedBotId = root.TryGetProperty("botId", out var viewedBotIdProp)
+                        ? viewedBotIdProp.GetString()
+                        : null;
+                    MarkViewedBotSeen();
+                    break;
+
                 case "getBotDetails":
                     if (root.TryGetProperty("botId", out var detailsBotIdProp))
                     {
@@ -266,6 +313,7 @@ public class WebViewBridge
             effort = b.Effort,
             permissionMode = b.PermissionMode,
             scheduledTasks = b.ScheduledTasks.Select(ToTaskPayload),
+            hasUnreadMessage = b.HasUnreadMessage,
         });
 
         PostEvent(new { type = "botList", bots });
@@ -301,6 +349,21 @@ public class WebViewBridge
 
     private void OnLogReceived(BotSession bot, LogLine line)
     {
+        // Csak a végleges bot-válasz és a hiba számít "üzenetnek" (UC-017) — a köztes
+        // gondolkodás/eszközhívás (Thinking) és a saját, visszaidézett User-sor nem generál
+        // jelzést. FIGYELEM: ez a metódus a bot-folyamat kimenetét olvasó háttérszálon fut.
+        if (line.Kind is LogKind.Assistant or LogKind.Error)
+        {
+            var isCurrentlyViewed = _isWindowVisible && _viewedBotId == bot.Name;
+            var changed = isCurrentlyViewed ? bot.MarkSeen() : bot.MarkUnread();
+
+            if (changed)
+            {
+                SendBotList();
+                UnreadStateChanged?.Invoke();
+            }
+        }
+
         PostEvent(new
         {
             type = "logAppended",

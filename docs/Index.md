@@ -18,6 +18,7 @@
 | uc-014 | UC-014 — Ütemezett feladat azonnali, kézi futtatása | use-case | docs/use-cases/uc-014-utemezett-feladat-kezi-futtatasa.md |
 | uc-015 | UC-015 — Feladat-futások állapotának áttekintése | use-case | docs/use-cases/uc-015-feladat-futasok-attekintese.md |
 | uc-016 | UC-016 — Bot végleges törlése | use-case | docs/use-cases/uc-016-bot-torlese.md |
+| uc-017 | UC-017 — Olvasatlan bot-üzenet jelzése | use-case | docs/use-cases/uc-017-olvasatlan-uzenet-jelzese.md |
 | architecture-c1 | Architektúra diagram — C1 (System Context) | architecture-c1 | docs/architecture-c1.md |
 | architecture-c2-claude-bot | Architektúra diagram — C2 (Container) – ClaudeBot | architecture-c2 | docs/architecture-c2/claude-bot.md |
 | architecture-c3-winforms-host | Architektúra diagram — C3 (Component) – WinForms Host | architecture-c3 | docs/architecture-c3/winforms-host.md |

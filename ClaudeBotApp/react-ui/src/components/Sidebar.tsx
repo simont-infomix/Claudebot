@@ -47,6 +47,9 @@ export function Sidebar({
           title={bot.name}
         >
           <span className={`status-dot status-dot--${bot.status}`} />
+          {bot.hasUnreadMessage && (
+            <span className="unread-badge" aria-label="Olvasatlan üzenet" />
+          )}
           {bot.avatarDataUrl ? (
             <img src={bot.avatarDataUrl} alt="" className="avatar__image" />
           ) : (
