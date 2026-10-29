@@ -1,4 +1,4 @@
-import type { BotSettingsDraft, EncodedAttachment, HostEvent } from '../types';
+import type { BotSettingsDraft, EncodedAttachment, HostEvent, ScheduledTask } from '../types';
 
 type Listener = (event: HostEvent) => void;
 
@@ -49,8 +49,11 @@ class BridgeClient {
     this.send({ type: 'setBotAvatar', botId, contentType, dataBase64 });
   }
 
-  saveSettings(botId: string, settings: BotSettingsDraft): void {
-    this.send({ type: 'saveSettings', botId, ...settings });
+  /** A beállítások és a feladatlista külön érkezik, mert két különböző felület szerkeszti őket —
+   *  a hívónak mindig a másik fél FRISS állapotát kell megadnia, nem egy piszkozatból vett
+   *  másolatot. */
+  saveSettings(botId: string, settings: BotSettingsDraft, scheduledTasks: ScheduledTask[]): void {
+    this.send({ type: 'saveSettings', botId, ...settings, scheduledTasks });
   }
 
   setSettingsDirty(dirty: boolean): void {
@@ -63,6 +66,10 @@ class BridgeClient {
 
   getBotDetails(botId: string): void {
     this.send({ type: 'getBotDetails', botId });
+  }
+
+  runTask(botId: string, taskId: string): void {
+    this.send({ type: 'runTask', botId, taskId });
   }
 
   sendPrompt(botId: string, text: string, attachments: EncodedAttachment[] = []): void {

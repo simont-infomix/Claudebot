@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ClaudeBotApp;
 
@@ -9,12 +10,24 @@ public record CapabilityInfo(string Name, string? Description);
 
 public class BotSessionManager
 {
+    /// <summary>Az enumokat szövegként írjuk a .bot-meta.json-ba, hogy a mentett ütemezés kézzel
+    /// is olvasható/diagnosztizálható maradjon, ne nyers számként jelenjen meg.</summary>
+    private static readonly JsonSerializerOptions MetaJsonOptions = new()
+    {
+        Converters = { new JsonStringEnumConverter() },
+        WriteIndented = true,
+    };
+
     private readonly string _rootDir;
     private readonly List<BotSession> _bots = new();
 
     public event Action? BotListChanged;
     public event Action<BotSession, LogLine>? LogReceived;
     public event Action<BotSession, BotStatus>? BotStatusChanged;
+
+    /// <summary>Egy prompt feldolgozása befejeződött. A scheduler ebből tudja meg, hogy egy
+    /// feladat-futás véget ért. Háttérszálon hívódik (ld. <see cref="BotSession.TurnCompleted"/>).</summary>
+    public event Action<BotSession, string, bool>? TurnCompleted;
 
     public IReadOnlyList<BotSession> Bots => _bots;
 
@@ -57,6 +70,50 @@ public class BotSessionManager
     public void RestartBot(string id)
     {
         FindBot(id)?.Restart();
+    }
+
+    /// <summary>A bot konfigurációjának lemezre mentése és a felület értesítése. A scheduler
+    /// hívja, miután egy feladat futási állapota (utolsó/következő futás) megváltozott.</summary>
+    public void PersistBot(BotSession bot)
+    {
+        SaveMeta(bot);
+        BotListChanged?.Invoke();
+    }
+
+    /// <summary>Induláskor minden aktív feladathoz kiszámolja a következő futást, ha még nincs
+    /// (új feladat, vagy korábban szüneteltetett volt). A már beütemezett — akár múltbeli —
+    /// időpontokat szándékosan érintetlenül hagyja, mert a kimaradt futások pótlásáról a
+    /// scheduler dönt a saját küszöbe alapján (ADR-0001).</summary>
+    public void InitializeTaskSchedules()
+    {
+        var now = DateTime.Now;
+
+        foreach (var bot in _bots)
+        {
+            var changed = false;
+
+            foreach (var task in bot.ScheduledTasks)
+            {
+                if (!task.Enabled)
+                {
+                    if (task.NextRunAt == null)
+                        continue;
+
+                    task.NextRunAt = null;
+                    changed = true;
+                    continue;
+                }
+
+                if (task.NextRunAt != null)
+                    continue;
+
+                task.NextRunAt = TaskScheduleCalculator.ComputeNextRun(task.Schedule, now);
+                changed = true;
+            }
+
+            if (changed)
+                SaveMeta(bot);
+        }
     }
 
     public void SendPrompt(string name, string text, IReadOnlyList<string>? attachmentNames = null)
@@ -119,19 +176,39 @@ public class BotSessionManager
             newId = trimmedName;
         }
 
-        bot.DisplayName = trimmedName;
-        bot.AllowedTools = allowedTools
+        var newAllowedTools = allowedTools
             .Select(t => t.Trim())
             .Where(t => t.Length > 0)
             .Distinct()
             .ToList();
-        bot.Model = string.IsNullOrWhiteSpace(model) ? null : model.Trim();
-        bot.Effort = string.IsNullOrWhiteSpace(effort) ? null : effort.Trim();
-        bot.PermissionMode = string.IsNullOrWhiteSpace(permissionMode) ? BotSession.DefaultPermissionMode : permissionMode.Trim();
-        bot.ScheduledTasks = scheduledTasks.ToList();
+        var newModel = string.IsNullOrWhiteSpace(model) ? null : model.Trim();
+        var newEffort = string.IsNullOrWhiteSpace(effort) ? null : effort.Trim();
+        var newPermissionMode = string.IsNullOrWhiteSpace(permissionMode)
+            ? BotSession.DefaultPermissionMode
+            : permissionMode.Trim();
+
+        // A claude.exe ezeket csak induláskor olvassa, ezért változásuk újraindítást igényel —
+        // a feladatlista viszont nem, azt a scheduler futásidőben használja. Enélkül egy feladat
+        // szüneteltetése is eldobná a bot beszélgetés-kontextusát.
+        var needsRestart =
+            newId != null ||
+            bot.Model != newModel ||
+            bot.Effort != newEffort ||
+            bot.PermissionMode != newPermissionMode ||
+            !bot.AllowedTools.SequenceEqual(newAllowedTools);
+
+        bot.DisplayName = trimmedName;
+        bot.AllowedTools = newAllowedTools;
+        bot.Model = newModel;
+        bot.Effort = newEffort;
+        bot.PermissionMode = newPermissionMode;
+        bot.ScheduledTasks = MergeScheduledTasks(bot.ScheduledTasks, scheduledTasks);
 
         SaveMeta(bot);
-        bot.Restart();
+
+        if (needsRestart)
+            bot.Restart();
+
         BotListChanged?.Invoke();
         return (true, null, newId);
     }
@@ -210,6 +287,68 @@ public class BotSessionManager
         return null;
     }
 
+    /// <summary>
+    /// A felületről érkező feladatlistát fésüli össze a meglévővel. A felület csak a DEFINÍCIÓS
+    /// mezőket küldi vissza hitelesen; a futásidejű mezőket (utolsó/következő futás) a scheduler
+    /// tartja karban, ezért azokat azonosító alapján a meglévő állapotból vesszük át. Enélkül egy
+    /// nyitott Settings lapról történő mentés felülírná a közben lefutott feladat friss futási
+    /// adatát (ld. ADR-0001).
+    /// </summary>
+    private static List<ScheduledTask> MergeScheduledTasks(
+        IReadOnlyList<ScheduledTask> existing, IReadOnlyList<ScheduledTask> incoming)
+    {
+        var previousById = existing
+            .GroupBy(t => t.Id)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var now = DateTime.Now;
+        var merged = new List<ScheduledTask>();
+
+        foreach (var task in incoming)
+        {
+            if (previousById.TryGetValue(task.Id, out var previous))
+            {
+                task.LastRun = previous.LastRun;
+                task.NextRunAt = previous.NextRunAt;
+
+                // Csak akkor számolunk újra, ha az ütemezés vagy az aktív állapot változott —
+                // különben a már beütemezett időpont érvényben marad.
+                var needsRecompute =
+                    !SchedulesEqual(previous.Schedule, task.Schedule) || previous.Enabled != task.Enabled;
+
+                if (needsRecompute)
+                    task.NextRunAt = ComputeNextRunFor(task, now);
+            }
+            else
+            {
+                task.NextRunAt = ComputeNextRunFor(task, now);
+            }
+
+            merged.Add(task);
+        }
+
+        return merged;
+    }
+
+    /// <summary>Szüneteltetett feladatnak nincs esedékes futása (UC-012).</summary>
+    private static DateTime? ComputeNextRunFor(ScheduledTask task, DateTime after) =>
+        task.Enabled ? TaskScheduleCalculator.ComputeNextRun(task.Schedule, after) : null;
+
+    private static bool SchedulesEqual(TaskSchedule a, TaskSchedule b) =>
+        a.Type == b.Type &&
+        a.IntervalMinutes == b.IntervalMinutes &&
+        a.TimeOfDay == b.TimeOfDay &&
+        SameInts(a.DaysOfWeek, b.DaysOfWeek) &&
+        SameInts(a.DaysOfMonth, b.DaysOfMonth);
+
+    private static bool SameInts(List<int>? a, List<int>? b)
+    {
+        if (a == null || b == null)
+            return a == null && b == null;
+
+        return a.Count == b.Count && a.OrderBy(x => x).SequenceEqual(b.OrderBy(x => x));
+    }
+
     public void SetAvatar(string id, string contentType, string base64Data)
     {
         var bot = FindBot(id);
@@ -269,7 +408,7 @@ public class BotSessionManager
 
         try
         {
-            var meta = JsonSerializer.Deserialize<BotMeta>(File.ReadAllText(path));
+            var meta = JsonSerializer.Deserialize<BotMeta>(File.ReadAllText(path), MetaJsonOptions);
             if (!string.IsNullOrWhiteSpace(meta?.DisplayName))
             {
                 bot.DisplayName = meta.DisplayName;
@@ -306,7 +445,7 @@ public class BotSessionManager
             PermissionMode = bot.PermissionMode,
             ScheduledTasks = bot.ScheduledTasks,
         };
-        File.WriteAllText(GetMetaPath(bot), JsonSerializer.Serialize(meta));
+        File.WriteAllText(GetMetaPath(bot), JsonSerializer.Serialize(meta, MetaJsonOptions));
     }
 
     private sealed class BotMeta
@@ -363,6 +502,7 @@ public class BotSessionManager
         var bot = new BotSession(name, folderPath);
         bot.LogReceived += line => LogReceived?.Invoke(bot, line);
         bot.StatusChanged += status => BotStatusChanged?.Invoke(bot, status);
+        bot.TurnCompleted += (uuid, isError) => TurnCompleted?.Invoke(bot, uuid, isError);
         LoadMeta(bot);
         _bots.Add(bot);
 

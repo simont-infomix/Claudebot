@@ -28,9 +28,32 @@ partial class Form1
     /// </summary>
     private void InitializeComponent()
     {
+        components = new System.ComponentModel.Container();
         webView = new Microsoft.Web.WebView2.WinForms.WebView2();
+        trayMenu = new ContextMenuStrip(components);
+        trayExitItem = new ToolStripMenuItem();
+        trayIcon = new NotifyIcon(components);
         ((System.ComponentModel.ISupportInitialize)webView).BeginInit();
+        trayMenu.SuspendLayout();
         SuspendLayout();
+        //
+        // trayExitItem
+        //
+        trayExitItem.Name = "trayExitItem";
+        trayExitItem.Text = "Bezárás";
+        trayExitItem.Click += TrayExitItem_Click;
+        //
+        // trayMenu
+        //
+        trayMenu.Items.AddRange(new ToolStripItem[] { trayExitItem });
+        trayMenu.Name = "trayMenu";
+        //
+        // trayIcon
+        //
+        trayIcon.ContextMenuStrip = trayMenu;
+        trayIcon.Text = "ClaudeBot";
+        trayIcon.Visible = true;
+        trayIcon.DoubleClick += TrayIcon_DoubleClick;
         //
         // webView
         //
@@ -55,10 +78,14 @@ partial class Form1
         FormClosing += Form1_FormClosing;
         Load += Form1_Load;
         ((System.ComponentModel.ISupportInitialize)webView).EndInit();
+        trayMenu.ResumeLayout(false);
         ResumeLayout(false);
     }
 
     #endregion
 
     private Microsoft.Web.WebView2.WinForms.WebView2 webView;
+    private NotifyIcon trayIcon;
+    private ContextMenuStrip trayMenu;
+    private ToolStripMenuItem trayExitItem;
 }

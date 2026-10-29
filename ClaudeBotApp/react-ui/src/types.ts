@@ -4,11 +4,49 @@ export type SettingsTab = 'settings' | 'definition' | 'capabilities';
 
 export type MainTab = 'chat' | 'tasks';
 
+/**
+ * Ütemezés-típusok (UC-010). Nincs külön "naponta" típus: a napi ismétlődés a `weekly`
+ * mind a hét napjának kijelölésével adható meg ("minden nap" kapcsoló).
+ */
+export type TaskScheduleType = 'interval' | 'weekly' | 'monthly';
+
+export interface TaskSchedule {
+  type: TaskScheduleType;
+  /** `interval` ("naponta többször") típusnál: két futás között eltelő percek száma. */
+  intervalMinutes?: number;
+  /** `weekly` és `monthly` típusnál: a futás időpontja "HH:MM" alakban. */
+  timeOfDay?: string;
+  /** `weekly` típusnál: a futás napjai, 0 = vasárnap … 6 = szombat. */
+  daysOfWeek?: number[];
+  /**
+   * `monthly` típusnál: a hónap napjai 1–31 között. A 29–31. napok a rövidebb hónapokban a
+   * hónap utolsó napjára csúsznak, hogy egyetlen hónap se maradjon ki.
+   */
+  daysOfMonth?: number[];
+}
+
+/** Egy lefutás kimenetele (UC-013, UC-015). */
+export type TaskRunOutcome = 'success' | 'failed' | 'skipped';
+
+export interface TaskRun {
+  /** ISO-8601 időbélyeg. */
+  at: string;
+  outcome: TaskRunOutcome;
+  /** `failed`/`skipped` esetén a rövid ok, amit a felhasználó lát. */
+  error?: string | null;
+}
+
 export interface ScheduledTask {
   id: string;
   name: string;
-  schedule: string;
   prompt: string;
+  schedule: TaskSchedule;
+  /** false = szüneteltetve: nem fut automatikusan, kézzel továbbra is indítható (UC-012). */
+  enabled: boolean;
+  /** null, ha a feladat még sosem futott le. */
+  lastRun: TaskRun | null;
+  /** ISO-8601; null, ha szüneteltetett (ilyenkor nincs esedékes futás). */
+  nextRunAt: string | null;
 }
 
 export interface Bot {
@@ -23,13 +61,17 @@ export interface Bot {
   scheduledTasks: ScheduledTask[];
 }
 
+/**
+ * Amit a Settings lap szerkeszt. A feladatlista szándékosan NINCS benne: az a főképernyő
+ * Feladatok tabján él, és azonnal ment — ha a Settings piszkozata is hordozná, egy elavult
+ * másolattal felülírná a közben felvett feladatokat.
+ */
 export interface BotSettingsDraft {
   name: string;
   allowedTools: string[];
   model: string | null;
   effort: string | null;
   permissionMode: string;
-  scheduledTasks: ScheduledTask[];
 }
 
 export interface CapabilityInfo {
@@ -63,10 +105,11 @@ export type HostRequest =
   | { type: 'openWorkspaceFolder'; botId: string }
   | { type: 'restartBot'; botId: string }
   | { type: 'setBotAvatar'; botId: string; contentType: string; dataBase64: string }
-  | ({ type: 'saveSettings'; botId: string } & BotSettingsDraft)
+  | ({ type: 'saveSettings'; botId: string; scheduledTasks: ScheduledTask[] } & BotSettingsDraft)
   | { type: 'setSettingsDirty'; dirty: boolean }
   | { type: 'respondToExitConfirm'; confirmed: boolean }
   | { type: 'getBotDetails'; botId: string }
+  | { type: 'runTask'; botId: string; taskId: string }
   | { type: 'sendPrompt'; botId: string; text: string; attachments: EncodedAttachment[] };
 
 export type HostEvent =

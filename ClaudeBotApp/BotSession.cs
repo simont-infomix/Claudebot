@@ -22,17 +22,6 @@ public enum LogKind
 
 public readonly record struct LogLine(LogKind Kind, string Text);
 
-/// <summary>Egy bot-onként definiált, ütemezett feladat — egyelőre csak adatmodell: a
-/// tényleges időzített végrehajtás (scheduler) még nincs megírva, ez a Feladatok tab
-/// CRUD-jának perzisztencia-rétege.</summary>
-public class ScheduledTask
-{
-    public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string Name { get; set; } = "";
-    public string Schedule { get; set; } = "";
-    public string Prompt { get; set; } = "";
-}
-
 public class BotSession
 {
     public const string AgentFileName = "agent.md";
@@ -58,6 +47,12 @@ public class BotSession
 
     public event Action<LogLine>? LogReceived;
     public event Action<BotStatus>? StatusChanged;
+
+    /// <summary>Egy prompt feldolgozásának vége. Paraméterek: a <see cref="SendPrompt"/> által
+    /// visszaadott prompt-uuid, és hogy hibával zárult-e. A claude.exe `result` eseményéből jön,
+    /// amelynek `user_message_uuid` mezője visszamutat a kiváltó promptra (ld. ADR-0001).
+    /// FIGYELEM: a folyamat kimenetét olvasó háttérszálon hívódik.</summary>
+    public event Action<string, bool>? TurnCompleted;
 
     public BotSession(string name, string folderPath)
     {
@@ -149,11 +144,18 @@ public class BotSession
         }
     }
 
-    public void SendPrompt(string text, IReadOnlyList<string>? attachmentNames = null)
+    /// <summary>
+    /// Promptot küld a bot session-jének. Visszaadja a prompt uuid-ját, amivel a befejezés
+    /// (<see cref="TurnCompleted"/>) később azonosítható — vagy null-t, ha nem sikerült elküldeni.
+    /// A <paramref name="taskName"/> megadásakor a prompt feladat-futásként jelenik meg a
+    /// csevegésben (UC-013); ilyenkor a felhasználói üzenet is eseményt vált ki, mert a felület
+    /// ezt — a kézi üzenetküldéssel ellentétben — nem jeleníti meg előre.
+    /// </summary>
+    public string? SendPrompt(string text, IReadOnlyList<string>? attachmentNames = null, string? taskName = null)
     {
         var hasAttachments = attachmentNames != null && attachmentNames.Count > 0;
         if (_process == null || _process.HasExited || (string.IsNullOrWhiteSpace(text) && !hasAttachments))
-            return;
+            return null;
 
         var promptText = text;
         var displayText = text;
@@ -170,9 +172,10 @@ public class BotSession
             displayText = string.IsNullOrWhiteSpace(text) ? fileNote : $"{text}\n\n{fileNote}";
         }
 
+        var uuid = Guid.NewGuid().ToString();
         var payload = new
         {
-            uuid = Guid.NewGuid().ToString(),
+            uuid,
             session_id = "",
             type = "user",
             parent_tool_use_id = (string?)null,
@@ -185,17 +188,28 @@ public class BotSession
             LogDebug(">>", json);
             _process.StandardInput.WriteLine(json);
 
-            // Csak a history-ba kerül be (a kiválasztott bot React oldala már optimistán
-            // megjelenítette a saját üzenetét) — nincs esemény-dobás, hogy ne duplikálódjon.
-            AccumulatedLog.Add(new LogLine(LogKind.User, displayText));
+            if (taskName != null)
+            {
+                // Feladat-futás: a felület nem jelenítette meg előre, ezért eseményt is dobunk.
+                RaiseLog(LogKind.Info, $"⏱ Ütemezett feladat: {taskName}");
+                RaiseLog(LogKind.User, displayText);
+            }
+            else
+            {
+                // Kézi üzenet: csak a history-ba kerül be (a kiválasztott bot React oldala már
+                // optimistán megjelenítette) — nincs esemény-dobás, hogy ne duplikálódjon.
+                AccumulatedLog.Add(new LogLine(LogKind.User, displayText));
+            }
 
             // Azonnali, vizuális jelzés, hogy elindult a feldolgozás — a claude.exe tényleges
             // thinking/tool_use eseményei csak egy kis késéssel érkeznek meg.
             RaiseLog(LogKind.Thinking, "Gondolkodik…");
+            return uuid;
         }
         catch (Exception ex)
         {
             RaiseLog(LogKind.Error, $"prompt küldése sikertelen: {ex.Message}");
+            return null;
         }
     }
 
@@ -237,6 +251,7 @@ public class BotSession
         try
         {
             using var doc = JsonDocument.Parse(e.Data);
+            TryRaiseTurnCompleted(doc.RootElement);
             foreach (var (kind, text) in ExtractLogEntries(doc.RootElement))
             {
                 RaiseLog(kind, text);
@@ -314,6 +329,27 @@ public class BotSession
         }
 
         return detail != null ? $"🔧 {label}: {detail}" : $"🔧 {label}";
+    }
+
+    /// <summary>A kör végét jelző `result` eseményből váltja ki a <see cref="TurnCompleted"/>-et.
+    /// A `user_message_uuid` köti a befejezést a kiváltó prompthoz, így a chat-üzenetek és a
+    /// feladat-futások nem keverednek össze.</summary>
+    private void TryRaiseTurnCompleted(JsonElement root)
+    {
+        if (!root.TryGetProperty("type", out var typeProp) || typeProp.GetString() != "result")
+            return;
+
+        if (!root.TryGetProperty("user_message_uuid", out var uuidProp))
+            return;
+
+        var uuid = uuidProp.GetString();
+        if (string.IsNullOrEmpty(uuid))
+            return;
+
+        var isError = root.TryGetProperty("is_error", out var errorProp) &&
+                      errorProp.ValueKind == JsonValueKind.True;
+
+        TurnCompleted?.Invoke(uuid, isError);
     }
 
     private void OnErrorDataReceived(object? sender, DataReceivedEventArgs e)

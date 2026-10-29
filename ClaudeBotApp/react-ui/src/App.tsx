@@ -13,6 +13,7 @@ import type {
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { TasksView } from './components/TasksView';
+import { TaskEditorView } from './components/TaskEditorView';
 import { SettingsView } from './components/SettingsView';
 import { NewBotDialog } from './components/NewBotDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -30,15 +31,17 @@ export default function App() {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [settingsDirty, setSettingsDirty] = useState(false);
-  const [tasksDirty, setTasksDirty] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [botDetails, setBotDetails] = useState<BotDetails | null>(null);
+  const [taskEditorOpen, setTaskEditorOpen] = useState(false);
+  const [taskBeingEdited, setTaskBeingEdited] = useState<ScheduledTask | null>(null);
 
-  // A hosztnak (WinForms) a Settings lap ÉS a Feladatok nézet mentetlen módosítását is együtt
-  // kell jeleznünk — bármelyik dirty, alkalmazás-bezáráskor rá kell kérdezni.
+  // A hosztnak (WinForms) jelezzük a mentetlen módosítást, hogy alkalmazás-bezáráskor rá
+  // tudjon kérdezni. Csak a Settings lapnak van piszkozat-állapota — a Feladatok nézet minden
+  // műveletet azonnal ment, ott nem keletkezhet mentetlen változás.
   useEffect(() => {
-    bridge.setSettingsDirty(settingsDirty || tasksDirty);
-  }, [settingsDirty, tasksDirty]);
+    bridge.setSettingsDirty(settingsDirty);
+  }, [settingsDirty]);
 
   useEffect(() => {
     bridge.getBots();
@@ -101,6 +104,8 @@ export default function App() {
     setSettingsError(null);
     setTasksError(null);
     setBotDetails(null);
+    // A feladat-szerkesztő a korábbi bot egyik feladatára vonatkozik, ezért botváltáskor zárjuk.
+    setTaskEditorOpen(false);
     bridge.selectBot(botId);
   }
 
@@ -123,22 +128,36 @@ export default function App() {
   // chat-logot és egy felesleges selectBot-kört indítana).
   function handleOpenSettingsForSelected() {
     if (!selectedBotId) return;
+    setTaskEditorOpen(false);
     setSettingsTab('settings');
     setSettingsOpen(true);
     bridge.getBotDetails(selectedBotId);
   }
 
+  /** Feladat-mentés: a beállítás-mezőket a bot MENTETT állapotából vesszük, nem a Settings lap
+   *  esetleg félkész piszkozatából. */
   function handleSaveTasks(scheduledTasks: ScheduledTask[]) {
     if (!selectedBot) return;
     setTasksError(null);
-    bridge.saveSettings(selectedBot.id, {
-      name: selectedBot.name,
-      allowedTools: selectedBot.allowedTools,
-      model: selectedBot.model,
-      effort: selectedBot.effort,
-      permissionMode: selectedBot.permissionMode,
+    bridge.saveSettings(
+      selectedBot.id,
+      {
+        name: selectedBot.name,
+        allowedTools: selectedBot.allowedTools,
+        model: selectedBot.model,
+        effort: selectedBot.effort,
+        permissionMode: selectedBot.permissionMode,
+      },
       scheduledTasks,
-    });
+    );
+  }
+
+  /** Új feladat felvétele vagy meglévő felülírása — mindkettő a teljes lista mentése. */
+  function handleSubmitTask(task: ScheduledTask) {
+    if (!selectedBot) return;
+    const existing = selectedBot.scheduledTasks;
+    const isEdit = existing.some((t) => t.id === task.id);
+    handleSaveTasks(isEdit ? existing.map((t) => (t.id === task.id ? task : t)) : [...existing, task]);
   }
 
   function handleCreateBot(name: string) {
@@ -207,11 +226,27 @@ export default function App() {
             <TasksView
               bot={selectedBot}
               error={tasksError}
-              onDirtyChange={setTasksDirty}
               onSave={handleSaveTasks}
+              onRunNow={(taskId) => {
+                setTasksError(null);
+                selectedBot && bridge.runTask(selectedBot.id, taskId);
+              }}
+              onOpenEditor={(task) => {
+                setTaskBeingEdited(task);
+                setTaskEditorOpen(true);
+              }}
             />
           )}
         </div>
+        <TaskEditorView
+          open={taskEditorOpen}
+          task={taskBeingEdited}
+          onClose={() => setTaskEditorOpen(false)}
+          onSubmit={(task) => {
+            handleSubmitTask(task);
+            setTaskEditorOpen(false);
+          }}
+        />
         <SettingsView
           bot={selectedBot}
           open={settingsOpen}
@@ -229,7 +264,8 @@ export default function App() {
           onDirtyChange={setSettingsDirty}
           onSave={(settings: BotSettingsDraft) => {
             setSettingsError(null);
-            selectedBot && bridge.saveSettings(selectedBot.id, settings);
+            // A feladatlistát a bot friss állapotából adjuk át — a Settings lap nem birtokolja.
+            selectedBot && bridge.saveSettings(selectedBot.id, settings, selectedBot.scheduledTasks);
           }}
         />
       </div>
@@ -243,7 +279,7 @@ export default function App() {
       {exitConfirmOpen && (
         <ConfirmDialog
           title="Alkalmazás bezárása"
-          message="Egy bot Settings lapján vagy a Feladatok nézetében mentetlen módosítások vannak. Biztosan bezárod az alkalmazást mentés nélkül?"
+          message="Egy bot Settings lapján mentetlen módosítások vannak. Biztosan bezárod az alkalmazást mentés nélkül?"
           onCancel={() => {
             setExitConfirmOpen(false);
             bridge.respondToExitConfirm(false);

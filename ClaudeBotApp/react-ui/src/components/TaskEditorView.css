@@ -1,0 +1,387 @@
+/* Jobbról becsúszó panel — ugyanaz a minta, mint a SettingsView-nál. */
+.task-editor {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: radial-gradient(ellipse 80% 60% at 20% 20%, rgba(0, 232, 200, 0.1) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 85% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 60%),
+    var(--bg-base);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateX(100%);
+  transition: transform var(--duration-standard) var(--ease-spring);
+}
+
+.task-editor--open {
+  transform: translateX(0);
+}
+
+.task-editor__header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 var(--sp-6);
+  padding: var(--sp-4) 0 var(--sp-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.task-editor__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.task-editor__header-spacer {
+  flex: 1;
+}
+
+.task-editor__close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color var(--duration-micro) ease,
+    background var(--duration-micro) ease;
+}
+
+.task-editor__close:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+}
+
+.task-editor__close:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.task-editor__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin: 0 var(--sp-4) 0 0;
+  padding: var(--sp-6);
+}
+
+.task-editor__form {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.task-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.task-field__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.task-field__hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: calc(-1 * var(--sp-1));
+}
+
+.task-field__input,
+.task-field__textarea {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: var(--sp-2) var(--sp-3);
+  /* a natív idő-választó sötét témát kapjon, ne világosat (WebView2/Chromium) */
+  color-scheme: dark;
+}
+
+.task-field__input--narrow {
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.task-field__input--tiny {
+  width: 72px;
+  flex-shrink: 0;
+}
+
+.task-schedule__unit {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.task-field__textarea {
+  min-height: 120px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  line-height: 1.5;
+}
+
+.task-field__input:focus,
+.task-field__textarea:focus {
+  outline: none;
+  border-color: rgba(0, 232, 200, 0.5);
+  box-shadow: 0 0 0 3px rgba(0, 232, 200, 0.12);
+}
+
+.task-schedule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-4);
+}
+
+.task-schedule__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.task-schedule__row--days {
+  align-items: flex-start;
+}
+
+.task-schedule__row-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.task-schedule__inline {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.task-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+}
+
+.task-day {
+  min-width: 36px;
+  height: 32px;
+  padding: 0 var(--sp-2);
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background var(--duration-micro) ease,
+    border-color var(--duration-micro) ease,
+    color var(--duration-micro) ease;
+}
+
+.task-day:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.task-day--on {
+  background: rgba(0, 232, 200, 0.12);
+  border-style: solid;
+  border-color: rgba(0, 232, 200, 0.4);
+  color: var(--text-primary);
+}
+
+.task-day:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.task-check {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  cursor: pointer;
+}
+
+.task-check__input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  /* natív jelölőnégyzet Aurora-akcentussal, sötét témában */
+  accent-color: var(--accent-primary);
+  color-scheme: dark;
+}
+
+.task-check__input:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.task-check__label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.task-check:hover .task-check__label {
+  color: var(--text-primary);
+}
+
+/* Teljes szélességű blokk (címke fölötte) — a 7 oszlopos naptár nem fér el egy soron
+   belül a címke mellett, mint a heti nap-választó. */
+.task-schedule__block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* Mindig a teljes 1–31 skála látszik, a tényleges hónaphossztól függetlenül. */
+.task-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--sp-1);
+}
+
+.task-month-day {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background var(--duration-micro) ease,
+    border-color var(--duration-micro) ease,
+    color var(--duration-micro) ease;
+}
+
+.task-month-day:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.task-month-day--on {
+  background: rgba(0, 232, 200, 0.12);
+  border-style: solid;
+  border-color: rgba(0, 232, 200, 0.4);
+  color: var(--text-primary);
+}
+
+.task-month-day:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.task-schedule__note {
+  margin: 0;
+  background: rgba(255, 184, 106, 0.1);
+  border: 1px solid rgba(255, 184, 106, 0.28);
+  border-radius: var(--radius-md);
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--warning);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.task-editor__footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 var(--sp-6);
+  padding: var(--sp-3) 0 var(--sp-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.task-editor__footer-spacer {
+  flex: 1;
+}
+
+.task-editor__validation {
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.task-editor__submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.task-editor__submit:disabled:hover {
+  filter: none;
+}
+
+.task-editor__cancel,
+.task-editor__submit {
+  height: 40px;
+  padding: 0 var(--sp-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  cursor: pointer;
+  transition: filter var(--duration-micro) ease, background var(--duration-micro) ease;
+}
+
+/* Secondary variáns (ld. ui-design-guideline — Gombok). */
+.task-editor__cancel {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  color: var(--text-primary);
+}
+
+.task-editor__cancel:hover {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+/* Primary variáns: teal→kék gradiens + glow. */
+.task-editor__submit {
+  background: linear-gradient(135deg, rgba(0, 232, 200, 1), rgba(75, 159, 255, 1));
+  border: none;
+  color: var(--text-inverse);
+  font-weight: 600;
+  box-shadow:
+    0 0 0 1px rgba(0, 232, 200, 0.3),
+    0 0 16px rgba(0, 232, 200, 0.2);
+}
+
+.task-editor__submit:hover {
+  filter: brightness(1.1);
+}
+
+.task-editor__cancel:focus-visible,
+.task-editor__submit:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
+}

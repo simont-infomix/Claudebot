@@ -9,6 +9,7 @@ public class WebViewBridge
 {
     private readonly WebView2 _webView;
     private readonly BotSessionManager _manager;
+    private readonly BotTaskScheduler _scheduler;
 
     /// <summary>A React oldal jelzi ezen keresztül, ha egy bot Settings lapján mentetlen
     /// módosítás van — a Form1_FormClosing ez alapján kérdez rá bezáráskor.</summary>
@@ -19,10 +20,11 @@ public class WebViewBridge
     /// WinForms MessageBox helyett, majd a döntést itt jelzi vissza.</summary>
     public event Action<bool>? ExitConfirmResponse;
 
-    public WebViewBridge(WebView2 webView, BotSessionManager manager)
+    public WebViewBridge(WebView2 webView, BotSessionManager manager, BotTaskScheduler scheduler)
     {
         _webView = webView;
         _manager = manager;
+        _scheduler = scheduler;
 
         _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
         _manager.BotListChanged += SendBotList;
@@ -124,13 +126,7 @@ public class WebViewBridge
                         {
                             foreach (var taskEl in tasksProp.EnumerateArray())
                             {
-                                scheduledTasks.Add(new ScheduledTask
-                                {
-                                    Id = taskEl.TryGetProperty("id", out var tIdProp) ? tIdProp.GetString() ?? Guid.NewGuid().ToString("N") : Guid.NewGuid().ToString("N"),
-                                    Name = taskEl.TryGetProperty("name", out var tNameProp) ? tNameProp.GetString() ?? "" : "",
-                                    Schedule = taskEl.TryGetProperty("schedule", out var tScheduleProp) ? tScheduleProp.GetString() ?? "" : "",
-                                    Prompt = taskEl.TryGetProperty("prompt", out var tPromptProp) ? tPromptProp.GetString() ?? "" : "",
-                                });
+                                scheduledTasks.Add(ParseScheduledTask(taskEl));
                             }
                         }
 
@@ -145,6 +141,20 @@ public class WebViewBridge
                         else if (newId != null)
                         {
                             PostEvent(new { type = "botRenamed", oldId = botId, newId });
+                        }
+                    }
+                    break;
+
+                case "runTask":
+                    if (root.TryGetProperty("botId", out var runBotIdProp) &&
+                        root.TryGetProperty("taskId", out var runTaskIdProp))
+                    {
+                        var (started, runError) = _scheduler.RunNow(
+                            runBotIdProp.GetString() ?? "", runTaskIdProp.GetString() ?? "");
+
+                        if (!started)
+                        {
+                            PostEvent(new { type = "error", message = runError });
                         }
                     }
                     break;
@@ -244,7 +254,7 @@ public class WebViewBridge
             model = b.Model,
             effort = b.Effort,
             permissionMode = b.PermissionMode,
-            scheduledTasks = b.ScheduledTasks.Select(t => new { id = t.Id, name = t.Name, schedule = t.Schedule, prompt = t.Prompt }),
+            scheduledTasks = b.ScheduledTasks.Select(ToTaskPayload),
         });
 
         PostEvent(new { type = "botList", bots });
@@ -298,6 +308,99 @@ public class WebViewBridge
         BotStatus.Running => "running",
         BotStatus.Error => "error",
         _ => "stopped",
+    };
+
+    /// <summary>A React oldalról érkező feladat-objektum beolvasása. Csak a DEFINÍCIÓS mezőket
+    /// veszi át — a futásidejű mezőket (utolsó/következő futás) a scheduler tartja karban, és a
+    /// mentés azokat azonosító alapján megőrzi (ld. ADR-0001).</summary>
+    private static ScheduledTask ParseScheduledTask(JsonElement el)
+    {
+        var task = new ScheduledTask
+        {
+            Id = el.TryGetProperty("id", out var idProp) && idProp.GetString() is { Length: > 0 } id
+                ? id
+                : Guid.NewGuid().ToString("N"),
+            Name = el.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? "" : "",
+            Prompt = el.TryGetProperty("prompt", out var promptProp) ? promptProp.GetString() ?? "" : "",
+            Enabled = !el.TryGetProperty("enabled", out var enabledProp) || enabledProp.GetBoolean(),
+        };
+
+        if (el.TryGetProperty("schedule", out var sched) && sched.ValueKind == JsonValueKind.Object)
+        {
+            task.Schedule = new TaskSchedule
+            {
+                Type = ScheduleTypeFromString(
+                    sched.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : null),
+                IntervalMinutes = sched.TryGetProperty("intervalMinutes", out var imProp) &&
+                                  imProp.ValueKind == JsonValueKind.Number
+                    ? imProp.GetInt32()
+                    : null,
+                TimeOfDay = sched.TryGetProperty("timeOfDay", out var todProp) ? todProp.GetString() : null,
+                DaysOfWeek = ReadIntList(sched, "daysOfWeek"),
+                DaysOfMonth = ReadIntList(sched, "daysOfMonth"),
+            };
+        }
+
+        return task;
+    }
+
+    private static List<int>? ReadIntList(JsonElement parent, string propertyName)
+    {
+        if (!parent.TryGetProperty(propertyName, out var prop) || prop.ValueKind != JsonValueKind.Array)
+            return null;
+
+        return prop.EnumerateArray()
+            .Where(e => e.ValueKind == JsonValueKind.Number)
+            .Select(e => e.GetInt32())
+            .ToList();
+    }
+
+    /// <summary>A feladat kimenő alakja a React oldal felé — az enumokat szövegesen adjuk át, a
+    /// dátumokat ISO-8601-ben, mert a felület így várja őket.</summary>
+    private static object ToTaskPayload(ScheduledTask t) => new
+    {
+        id = t.Id,
+        name = t.Name,
+        prompt = t.Prompt,
+        enabled = t.Enabled,
+        schedule = new
+        {
+            type = ScheduleTypeToString(t.Schedule.Type),
+            intervalMinutes = t.Schedule.IntervalMinutes,
+            timeOfDay = t.Schedule.TimeOfDay,
+            daysOfWeek = t.Schedule.DaysOfWeek,
+            daysOfMonth = t.Schedule.DaysOfMonth,
+        },
+        lastRun = t.LastRun == null
+            ? null
+            : new
+            {
+                at = t.LastRun.At.ToString("o"),
+                outcome = OutcomeToString(t.LastRun.Outcome),
+                error = t.LastRun.Error,
+            },
+        nextRunAt = t.NextRunAt?.ToString("o"),
+    };
+
+    private static string ScheduleTypeToString(TaskScheduleType type) => type switch
+    {
+        TaskScheduleType.Interval => "interval",
+        TaskScheduleType.Monthly => "monthly",
+        _ => "weekly",
+    };
+
+    private static TaskScheduleType ScheduleTypeFromString(string? value) => value switch
+    {
+        "interval" => TaskScheduleType.Interval,
+        "monthly" => TaskScheduleType.Monthly,
+        _ => TaskScheduleType.Weekly,
+    };
+
+    private static string OutcomeToString(TaskRunOutcome outcome) => outcome switch
+    {
+        TaskRunOutcome.Success => "success",
+        TaskRunOutcome.Failed => "failed",
+        _ => "skipped",
     };
 
     private static string KindToString(LogKind kind) => kind switch

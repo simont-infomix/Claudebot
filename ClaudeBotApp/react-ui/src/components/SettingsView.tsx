@@ -92,7 +92,6 @@ function draftFromBot(bot: Bot): BotSettingsDraft {
     model: bot.model,
     effort: bot.effort,
     permissionMode: bot.permissionMode,
-    scheduledTasks: bot.scheduledTasks,
   };
 }
 
@@ -103,8 +102,7 @@ function draftsEqual(a: BotSettingsDraft, b: BotSettingsDraft): boolean {
     a.effort === b.effort &&
     a.permissionMode === b.permissionMode &&
     a.allowedTools.length === b.allowedTools.length &&
-    a.allowedTools.every((t, i) => t === b.allowedTools[i]) &&
-    JSON.stringify(a.scheduledTasks) === JSON.stringify(b.scheduledTasks)
+    a.allowedTools.every((t, i) => t === b.allowedTools[i])
   );
 }
 
@@ -218,12 +216,6 @@ export function SettingsView({
 
   return (
     <div className={`settings-view${open ? ' settings-view--open' : ''}`}>
-      {isDirty && (
-        <button type="button" className="settings-view__save" onClick={handleSave}>
-          Mentés
-        </button>
-      )}
-
       {error && <div className="settings-view__error">{error}</div>}
 
       {showCloseConfirm && (
@@ -247,6 +239,11 @@ export function SettingsView({
           </button>
         ))}
         <span className="settings-view__tabs-spacer" />
+        {isDirty && (
+          <button type="button" className="settings-view__save" onClick={handleSave}>
+            Mentés
+          </button>
+        )}
         <button type="button" className="settings-view__close" onClick={requestClose} aria-label="Bezárás">
           ×
         </button>

@@ -6,42 +6,12 @@
   overflow: hidden;
 }
 
-.tasks-view__save {
-  position: absolute;
-  top: var(--sp-4);
-  /* lásd SettingsView.css .settings-view__save — ugyanaz a scrollbar-inset logika */
-  right: calc(var(--sp-4) + 10px + var(--sp-2));
-  z-index: 1;
-  height: 40px;
-  padding: 0 var(--sp-4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent-primary);
-  border: none;
-  border-radius: var(--radius-md);
-  color: var(--bg-base);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 0 20px rgba(0, 232, 200, 0.25);
-  transition: filter var(--duration-micro) ease;
-}
-
-.tasks-view__save:hover {
-  filter: brightness(1.1);
-}
-
-.tasks-view__save:focus-visible {
-  outline: 2px solid var(--accent-primary);
-  outline-offset: 3px;
-}
-
 .tasks-view__error {
   position: absolute;
-  top: calc(var(--sp-4) + 48px);
+  top: var(--sp-4);
   right: calc(var(--sp-4) + 10px + var(--sp-2));
   max-width: 320px;
+  z-index: 1;
   background: rgba(255, 83, 112, 0.1);
   border: 1px solid rgba(255, 83, 112, 0.3);
   border-radius: var(--radius-md);
@@ -57,7 +27,58 @@
   flex-direction: column;
   align-items: center;
   overflow-y: auto;
+  /* lásd SettingsView.css — a margó választja el a görgetősávot a panel szélétől, az
+     overflow-x: hidden pedig a láthatatlan tooltip-dobozok okozta vízszintes sávot zárja ki */
   overflow-x: hidden;
   margin: 0 var(--sp-4) var(--sp-4) 0;
-  padding: var(--sp-8) var(--sp-6) var(--sp-6);
+  padding: var(--sp-6);
+}
+
+.tasks-panel {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.tasks-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.tasks-panel__header-spacer {
+  flex: 1;
+}
+
+/* Ghost-variáns (ld. ui-design-guideline — Gombok): az elsődleges "új elem" akció. */
+.tasks-panel__add {
+  height: 32px;
+  padding: 0 var(--sp-3);
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-md);
+  color: var(--accent-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--duration-micro) ease;
+}
+
+.tasks-panel__add:hover {
+  background: rgba(0, 232, 200, 0.1);
+}
+
+.tasks-panel__add:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
 }
