@@ -12,6 +12,11 @@
 | uc-008 | UC-008 — Bot futási beállításainak (model/effort/permission mode) módosítása | use-case | docs/use-cases/uc-008-bot-futasi-beallitasok-modositasa.md |
 | uc-009 | UC-009 — Bot engedélyezett tool-jainak szabályozása | use-case | docs/use-cases/uc-009-bot-tool-engedelyek-szabalyozasa.md |
 | uc-010 | UC-010 — Ütemezett feladat definiálása egy bot számára | use-case | docs/use-cases/uc-010-utemezett-feladat-definialasa.md |
+| uc-011 | UC-011 — Ütemezett feladat módosítása vagy törlése | use-case | docs/use-cases/uc-011-utemezett-feladat-modositasa-torlese.md |
+| uc-012 | UC-012 — Ütemezett feladat szüneteltetése és újraaktiválása | use-case | docs/use-cases/uc-012-utemezett-feladat-szuneteltetese.md |
+| uc-013 | UC-013 — Ütemezett feladat automatikus lefutása | use-case | docs/use-cases/uc-013-utemezett-feladat-automatikus-lefutasa.md |
+| uc-014 | UC-014 — Ütemezett feladat azonnali, kézi futtatása | use-case | docs/use-cases/uc-014-utemezett-feladat-kezi-futtatasa.md |
+| uc-015 | UC-015 — Feladat-futások állapotának áttekintése | use-case | docs/use-cases/uc-015-feladat-futasok-attekintese.md |
 | architecture-c1 | Architektúra diagram — C1 (System Context) | architecture-c1 | docs/architecture-c1.md |
 | architecture-c2-claude-bot | Architektúra diagram — C2 (Container) – ClaudeBot | architecture-c2 | docs/architecture-c2/claude-bot.md |
 | architecture-c3-winforms-host | Architektúra diagram — C3 (Component) – WinForms Host | architecture-c3 | docs/architecture-c3/winforms-host.md |
@@ -19,4 +24,6 @@
 | architecture-c3-bot-workspace | Architektúra diagram — C3 (Component) – Bot workspace | architecture-c3 | docs/architecture-c3/bot-workspace.md |
 | architecture-c3-claude-code-cli-session | Architektúra diagram — C3 (Component) – Claude Code CLI session | architecture-c3 | docs/architecture-c3/claude-code-cli-session.md |
 | ui-design-guideline | UI design szabályzat | ui-design-guideline | docs/ui-design-guideline.md |
+| decision-01 | ADR-0001 — Ütemezett feladatok futtatása pollozó időzítővel, a definícióból számolt következő futással | adr | docs/adr/0001-utemezett-feladatok-pollozo-idozitovel.md |
+| decision-02 | ADR-0002 — Az alkalmazás alapértelmezetten a Windowsszal indul, tálcaikonnal | adr | docs/adr/0002-windows-indulas-es-talcaikon.md |
 | bug-001 | BUG-001 — A bot-terminál (cmd + claude + MCP-szerver) nem áll le az app bezárásakor | bug | docs/bugs/bug-001-terminal-folyamat-nem-all-le-bezaraskor.md |
