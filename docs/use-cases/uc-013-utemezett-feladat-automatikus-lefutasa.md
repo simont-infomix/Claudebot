@@ -18,10 +18,11 @@ references:
    A felhasználó a csevegésben látja, mit csinált a bot, és a feladat futási állapota is
    frissül.
    - **2.1 Precondition:** A feladat aktív (nincs szüneteltetve), az alkalmazás fut, és elérkezett
-     a feladat következő futási időpontja.
-   - **2.2 Exclusions:** Nem pótolja az alkalmazás leállított állapota alatt kimaradt futásokat —
-     a feladatok kizárólag futó alkalmazás mellett indulnak el. Nem fedi le a kézi futtatást
-     (UC-014).
+     a feladat következő futási időpontja. Az alkalmazás ablaka lehet elrejtve a tálcára — a
+     feladatok attól még futnak; a futáshoz csak az kell, hogy a folyamat éljen.
+   - **2.2 Exclusions:** Nem pótolja az alkalmazás leállított állapota alatt kimaradt futásokat
+     azon túl, amit a pótlási szabály megenged — a feladatok kizárólag futó alkalmazás mellett
+     indulnak el. Nem fedi le a kézi futtatást (UC-014).
 
 3. **Actors:** Primary: időzítő (idővezérelt indítás, a felhasználó javára). Secondary: a bot
    `claude.exe` session-je, a csevegés-nézet.

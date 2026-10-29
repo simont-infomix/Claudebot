@@ -26,4 +26,5 @@
 | ui-design-guideline | UI design szabályzat | ui-design-guideline | docs/ui-design-guideline.md |
 | decision-01 | ADR-0001 — Ütemezett feladatok futtatása pollozó időzítővel, a definícióból számolt következő futással | adr | docs/adr/0001-utemezett-feladatok-pollozo-idozitovel.md |
 | decision-02 | ADR-0002 — Az alkalmazás alapértelmezetten a Windowsszal indul, tálcaikonnal | adr | docs/adr/0002-windows-indulas-es-talcaikon.md |
+| decision-03 | ADR-0003 — Az ablak bezárása a tálcára rejt, az automatikus indítás kapcsolható | adr | docs/adr/0003-talcara-rejtes-es-kapcsolhato-autostart.md |
 | bug-001 | BUG-001 — A bot-terminál (cmd + claude + MCP-szerver) nem áll le az app bezárásakor | bug | docs/bugs/bug-001-terminal-folyamat-nem-all-le-bezaraskor.md |

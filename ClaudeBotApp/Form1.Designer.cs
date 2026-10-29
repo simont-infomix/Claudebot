@@ -31,11 +31,27 @@ partial class Form1
         components = new System.ComponentModel.Container();
         webView = new Microsoft.Web.WebView2.WinForms.WebView2();
         trayMenu = new ContextMenuStrip(components);
+        trayOpenItem = new ToolStripMenuItem();
+        trayAutostartItem = new ToolStripMenuItem();
         trayExitItem = new ToolStripMenuItem();
         trayIcon = new NotifyIcon(components);
         ((System.ComponentModel.ISupportInitialize)webView).BeginInit();
         trayMenu.SuspendLayout();
         SuspendLayout();
+        //
+        // trayOpenItem
+        //
+        trayOpenItem.Name = "trayOpenItem";
+        trayOpenItem.Text = "Megnyitás";
+        trayOpenItem.Font = new Font(trayOpenItem.Font, FontStyle.Bold);
+        trayOpenItem.Click += TrayOpenItem_Click;
+        //
+        // trayAutostartItem
+        //
+        trayAutostartItem.Name = "trayAutostartItem";
+        trayAutostartItem.Text = "Indítás a Windows-szal";
+        trayAutostartItem.CheckOnClick = false;
+        trayAutostartItem.Click += TrayAutostartItem_Click;
         //
         // trayExitItem
         //
@@ -45,8 +61,16 @@ partial class Form1
         //
         // trayMenu
         //
-        trayMenu.Items.AddRange(new ToolStripItem[] { trayExitItem });
+        trayMenu.Items.AddRange(new ToolStripItem[]
+        {
+            trayOpenItem,
+            new ToolStripSeparator(),
+            trayAutostartItem,
+            new ToolStripSeparator(),
+            trayExitItem,
+        });
         trayMenu.Name = "trayMenu";
+        trayMenu.Opening += TrayMenu_Opening;
         //
         // trayIcon
         //
@@ -87,5 +111,7 @@ partial class Form1
     private Microsoft.Web.WebView2.WinForms.WebView2 webView;
     private NotifyIcon trayIcon;
     private ContextMenuStrip trayMenu;
+    private ToolStripMenuItem trayOpenItem;
+    private ToolStripMenuItem trayAutostartItem;
     private ToolStripMenuItem trayExitItem;
 }

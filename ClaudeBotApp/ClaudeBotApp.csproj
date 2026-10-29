@@ -6,7 +6,15 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Az exe Win32 erőforrásába fordított ikon: ezt mutatja az Intéző és a tálca. -->
+    <ApplicationIcon>NeonRobot.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <!-- Ugyanaz az ikon .NET erőforrásként is, hogy futásidőben be tudjuk tölteni az ablak- és a
+       tálcaikonhoz — így mindhárom helyen garantáltan ugyanaz a kép jelenik meg. -->
+  <ItemGroup>
+    <EmbeddedResource Include="NeonRobot.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />

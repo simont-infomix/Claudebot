@@ -2,9 +2,9 @@
 id: decision-02
 title: "ADR-0002 — Az alkalmazás alapértelmezetten a Windowsszal indul, tálcaikonnal"
 type: adr
-version: 0.1.0
+version: 0.2.0
 created: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 references:
   - decision-01
   - uc-013
@@ -14,7 +14,7 @@ references:
 1. **ADR-0002: Az alkalmazás alapértelmezetten a Windowsszal indul, tálcaikonnal**
 
 2. **Metadata:**
-   - **Status:** Accepted
+   - **Status:** Superseded by ADR-0003
    - **Date:** 2026-10-28
    - **Deciders:** Simon Tamás
    - **Scope:** backend (WinForms host), telepítés/üzemeltetés
