@@ -1,4 +1,10 @@
-import type { BotSettingsDraft, EncodedAttachment, HostEvent, ScheduledTask } from '../types';
+import type {
+  BotSettingsDraft,
+  EncodedAttachment,
+  HostEvent,
+  PermissionAnswer,
+  ScheduledTask,
+} from '../types';
 
 type Listener = (event: HostEvent) => void;
 
@@ -78,6 +84,12 @@ class BridgeClient {
 
   setViewedBot(botId: string | null): void {
     this.send({ type: 'setViewedBot', botId });
+  }
+
+  /** Válasz egy tool-jóváhagyási kérésre (UC-018). A végleges állapotot nem ez adja, hanem a
+   *  host permissionResolved eseménye — a kérés időközben le is járhatott. */
+  respondToPermission(botId: string, requestId: string, decision: PermissionAnswer): void {
+    this.send({ type: 'respondToPermission', botId, requestId, decision });
   }
 
   sendPrompt(botId: string, text: string, attachments: EncodedAttachment[] = []): void {

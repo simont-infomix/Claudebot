@@ -2,10 +2,11 @@
 id: uc-009
 title: "UC-009 — Bot engedélyezett tool-jainak szabályozása"
 type: use-case
-version: 0.1.0
+version: 0.2.0
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-30
 references:
+  - uc-018
   - architecture-c3-react-ui
   - architecture-c3-winforms-host
   - architecture-c3-claude-code-cli-session
@@ -14,13 +15,15 @@ references:
 1. **Name:** Bot engedélyezett tool-jainak szabályozása
 
 2. **Goal / short description:** A felhasználó a Settings lap "Képességek" fülén be- vagy
-   kikapcsolja, mely MCP-szerverek tool-jait használhatja automatikusan a bot headless módban —
-   mivel a `claude.exe` headless futásnál nincs felugró jóváhagyás, enélkül minden nem explicit
-   engedélyezett tool-hívás némán elutasításra kerülne.
+   kikapcsolja, mely MCP-szerverek tool-jait használhatja a bot **előzetes jóváhagyás nélkül**.
+   Az itt engedélyezett tool-ok futásidőben nem váltanak ki kérdést; a listából kimaradó
+   hívásokra a bot — ha az interaktív jóváhagyás be van kapcsolva — esetenként rákérdez,
+   egyébként azok elutasításra kerülnek.
    - **2.1 Precondition:** Van kiválasztott bot, a Settings lap "Képességek" fülén áll.
-   - **2.2 Exclusions:** Nem ad lehetőséget natív tool-ok (pl. Bash) engedélyezésére, és nem
-     tartalmazza a sub agent-ek/skill-ek karbantartását — azok ezen a fülön csak információs
-     listaként jelennek meg, szerkesztés nélkül.
+   - **2.2 Exclusions:** Ezen a fülön nem lehet natív tool-t (pl. Bash) felvenni — azok tartós
+     engedélyezése a futásidejű jóváhagyó kártya "Mindig engedélyezd" gombjával történik.
+     A sub agent-ek/skill-ek karbantartása sem tartozik ide: azok csak információs listaként
+     jelennek meg, szerkesztés nélkül.
 
 3. **Actors:** Primary: felhasználó. Secondary: `BotSessionManager` (`ApplySettings`),
    `claude.exe` (`--allowedTools`).
@@ -41,4 +44,5 @@ flowchart TD
 5. **Potential errors:** –
 
 6. **Expected outcome:** A bot a mentés után csak az engedélyezett minták alá eső tool-okat
-   érheti el automatikusan; minden más tool-hívás továbbra is elutasításra kerül.
+   érheti el kérdés nélkül; minden más tool-hívásnál a felhasználó futásidőben dönt, vagy —
+   kikapcsolt interaktív jóváhagyás mellett — a hívás elutasításra kerül.

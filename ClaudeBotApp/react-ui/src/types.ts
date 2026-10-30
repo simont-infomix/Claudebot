@@ -58,10 +58,14 @@ export interface Bot {
   model: string | null;
   effort: string | null;
   permissionMode: string;
+  /** Kérdezzen-e a bot futásidőben engedélyt a nem engedélyezett eszközökre (UC-018). */
+  interactiveApproval: boolean;
   scheduledTasks: ScheduledTask[];
   /** Van-e olyan bot-válasz vagy hiba, amit a felhasználó még nem látott (UC-017). Csak
    *  jelzés, nem számláló. */
   hasUnreadMessage: boolean;
+  /** Hány jóváhagyási kérése vár válaszra (UC-018) — a sidebar jelzéséhez. */
+  pendingApprovalCount: number;
 }
 
 /**
@@ -75,6 +79,7 @@ export interface BotSettingsDraft {
   model: string | null;
   effort: string | null;
   permissionMode: string;
+  interactiveApproval: boolean;
 }
 
 export interface CapabilityInfo {
@@ -88,11 +93,42 @@ export interface BotDetails {
   subAgents: CapabilityInfo[];
 }
 
-export type LogKind = 'assistant' | 'info' | 'error' | 'user' | 'thinking';
+export type LogKind = 'assistant' | 'info' | 'error' | 'user' | 'thinking' | 'permission';
 
 export interface LogLine {
   kind: LogKind;
   text: string;
+  /** Csak 'permission' sornál: ez köti a chat adott pontját a jóváhagyási kéréshez, így a
+   *  kártya a helyén marad bot-váltás és a beszélgetés visszatöltése után is (UC-018). */
+  requestId?: string | null;
+}
+
+/** Egy jóváhagyási kérés sorsa. A 'pending'-en kívüli értékek véglegesek. */
+export type PermissionDecision =
+  | 'pending'
+  | 'allowed'
+  | 'allowedAlways'
+  | 'denied'
+  | 'timedOut'
+  /** A bot folyamata leállt/újraindult, mielőtt válasz született volna. */
+  | 'cancelled';
+
+/** A felhasználó három lehetséges válasza egy kérésre. */
+export type PermissionAnswer = 'allow' | 'allowAlways' | 'deny';
+
+/** A bot egy olyan eszközt használna, amire nincs előzetes engedélye (UC-018). */
+export interface PermissionRequest {
+  requestId: string;
+  toolName: string;
+  /** Egysoros összefoglaló a kért műveletről (pl. a futtatandó parancs). */
+  inputSummary: string;
+  /** A teljes input JSON-ja, a lenyitható részletekhez. */
+  inputJson: string;
+  decisionReason: string | null;
+  /** Ütemezett feladat köre-e — ilyenkor rövidebb a válaszadási határidő. */
+  isScheduledRun: boolean;
+  /** ISO-8601; eddig vár a kérés, utána automatikus elutasítás. */
+  expiresAt: string;
 }
 
 export interface EncodedAttachment {
@@ -116,12 +152,17 @@ export type HostRequest =
   | { type: 'runTask'; botId: string; taskId: string }
   /** Melyik bot csevegése van ténylegesen a képernyőn — null, ha egyik sincs (UC-017). */
   | { type: 'setViewedBot'; botId: string | null }
+  | { type: 'respondToPermission'; botId: string; requestId: string; decision: PermissionAnswer }
   | { type: 'sendPrompt'; botId: string; text: string; attachments: EncodedAttachment[] };
 
 export type HostEvent =
   | { type: 'botList'; bots: Bot[] }
-  | { type: 'botLog'; botId: string; lines: LogLine[] }
+  /** A beszélgetés és a hozzá tartozó függő kérések EGY üzenetben — két külön eseménynél a
+   *  sorrendjük nem lenne garantált, és a kártyák rövid időre rossz állapotban jelennének meg. */
+  | { type: 'botLog'; botId: string; lines: LogLine[]; pendingPermissions: PermissionRequest[] }
   | { type: 'logAppended'; botId: string; line: LogLine }
+  | { type: 'permissionRequest'; botId: string; request: PermissionRequest }
+  | { type: 'permissionResolved'; botId: string; requestId: string; decision: PermissionDecision }
   | { type: 'botStatusChanged'; botId: string; status: BotStatus }
   | { type: 'botRenamed'; oldId: string; newId: string }
   | { type: 'confirmExit' }

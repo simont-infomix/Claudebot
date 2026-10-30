@@ -33,7 +33,13 @@ public class BotTaskScheduler
     /// mentés új <see cref="ScheduledTask"/> példányokat hoz létre (ld. MergeScheduledTasks),
     /// így egy futás közbeni mentés után a régi referenciára írt eredmény elveszne. A
     /// <see cref="BotSession"/> ezzel szemben stabil objektum, átnevezést is túlél.</summary>
-    private sealed record InFlightRun(BotSession Bot, string TaskId);
+    private sealed record InFlightRun(BotSession Bot, string TaskId, DateTime StartedAt);
+
+    /// <summary>Ennyi után egy folyamatban lévő futást elveszettnek tekintünk. Védelem az ellen,
+    /// hogy egy elmaradt `result` (pl. a kör közben leállított folyamat) örökre bent ragadjon a
+    /// nyilvántartásban: a feladat onnantól minden automatikus körön "még fut" címén kimaradna,
+    /// kézzel indítva pedig hibát adna — némán, az app újraindításáig.</summary>
+    private static readonly TimeSpan MaxRunDuration = TimeSpan.FromMinutes(45);
 
     public BotTaskScheduler(BotSessionManager manager)
     {
@@ -56,6 +62,8 @@ public class BotTaskScheduler
 
     private void Tick(DateTime now)
     {
+        ReapStalledRuns(now);
+
         foreach (var bot in _manager.Bots.ToList())
         {
             foreach (var task in bot.ScheduledTasks.ToList())
@@ -132,7 +140,7 @@ public class BotTaskScheduler
 
         lock (_gate)
         {
-            _inFlight[uuid] = new InFlightRun(bot, task.Id);
+            _inFlight[uuid] = new InFlightRun(bot, task.Id, now);
         }
 
         if (advanceSchedule)
@@ -144,12 +152,12 @@ public class BotTaskScheduler
 
     /// <summary>Háttérszálon hívódik, amikor egy prompt feldolgozása véget ér. A chat-üzenetek
     /// befejezését figyelmen kívül hagyjuk — azok nincsenek a nyilvántartásban.</summary>
-    private void OnTurnCompleted(BotSession bot, string uuid, bool isError)
+    private void OnTurnCompleted(BotSession bot, TurnResult result)
     {
         InFlightRun? run;
         lock (_gate)
         {
-            if (!_inFlight.Remove(uuid, out run))
+            if (!_inFlight.Remove(result.PromptUuid, out run))
                 return;
         }
 
@@ -158,13 +166,42 @@ public class BotTaskScheduler
         if (task == null)
             return;
 
+        // A FailureReason nélkül egy elutasított jóváhagyás miatt félbemaradt futás sikeresnek
+        // látszana: a claude.exe elutasítás után is `is_error: false`-szal zárja a kört.
+        var error = result.FailureReason
+            ?? (result.IsError ? "A bot hibával zárta a futást — a részletek a csevegésben olvashatók." : null);
+
         RecordOutcome(
             run.Bot,
             task,
-            isError ? TaskRunOutcome.Failed : TaskRunOutcome.Success,
-            isError ? "A bot hibával zárta a futást — a részletek a csevegésben olvashatók." : null,
+            result.Failed ? TaskRunOutcome.Failed : TaskRunOutcome.Success,
+            error,
             DateTime.Now,
             advanceSchedule: false);
+    }
+
+    /// <summary>Kitakarítja a túl régóta "folyamatban" álló futásokat (ld. <see cref="MaxRunDuration"/>),
+    /// és sikertelenként könyveli őket — így a feladat a következő esedékességkor újra indulhat.</summary>
+    private void ReapStalledRuns(DateTime now)
+    {
+        List<KeyValuePair<string, InFlightRun>> stalled;
+        lock (_gate)
+        {
+            stalled = _inFlight.Where(kvp => now - kvp.Value.StartedAt > MaxRunDuration).ToList();
+            foreach (var kvp in stalled)
+                _inFlight.Remove(kvp.Key);
+        }
+
+        foreach (var (_, run) in stalled)
+        {
+            var task = run.Bot.ScheduledTasks.FirstOrDefault(t => t.Id == run.TaskId);
+            if (task == null)
+                continue;
+
+            RecordOutcome(run.Bot, task, TaskRunOutcome.Failed,
+                "A futás nem fejeződött be — a bot nem jelezte vissza az eredményt.", now,
+                advanceSchedule: false);
+        }
     }
 
     private bool IsRunning(string taskId)

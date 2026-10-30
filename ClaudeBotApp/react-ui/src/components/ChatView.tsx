@@ -1,16 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Bot, EncodedAttachment, LogLine } from '../types';
+import type {
+  Bot,
+  EncodedAttachment,
+  LogLine,
+  PermissionAnswer,
+  PermissionDecision,
+  PermissionRequest,
+} from '../types';
 import { ChatInput } from './ChatInput';
+import { PermissionCard } from './PermissionCard';
 import './ChatView.css';
 
 interface Props {
   bot: Bot | null;
   logs: LogLine[];
+  /** A bot jóváhagyási kérései requestId szerint — a chat 'permission' sorai ebből kapják
+   *  az élő állapotukat (UC-018). */
+  permissions: Record<string, { request: PermissionRequest; decision: PermissionDecision }>;
+  onRespondPermission: (requestId: string, answer: PermissionAnswer) => void;
   onSendPrompt: (text: string, attachments: EncodedAttachment[]) => void;
 }
 
 type RenderBlock =
   | { type: 'line'; key: string; line: LogLine }
+  | { type: 'permission'; key: string; requestId: string; fallbackText: string }
   | { type: 'thinking'; key: string; lines: LogLine[]; isLast: boolean };
 
 // Az egymás után érkező 'thinking' sorokat (tool_use/thinking tartalomblokkok, illetve a
@@ -31,6 +44,11 @@ function buildBlocks(logs: LogLine[]): RenderBlock[] {
         i++;
       }
       blocks.push({ type: 'thinking', key: `thinking-${start}`, lines: group, isLast: i === logs.length });
+    } else if (line.kind === 'permission' && line.requestId) {
+      // Saját blokktípus, nem 'line': a jóváhagyási kártya interaktív (gombjai vannak), ezért
+      // nem oldható meg a buborék CSS-módosítójával, mint a többi sortípus.
+      blocks.push({ type: 'permission', key: `perm-${line.requestId}`, requestId: line.requestId, fallbackText: line.text });
+      i++;
     } else {
       blocks.push({ type: 'line', key: `line-${i}`, line });
       i++;
@@ -40,7 +58,7 @@ function buildBlocks(logs: LogLine[]): RenderBlock[] {
   return blocks;
 }
 
-export function ChatView({ bot, logs, onSendPrompt }: Props) {
+export function ChatView({ bot, logs, permissions, onRespondPermission, onSendPrompt }: Props) {
   const logEndRef = useRef<HTMLDivElement>(null);
   const [expandedOverride, setExpandedOverride] = useState<Record<string, boolean>>({});
 
@@ -67,6 +85,30 @@ export function ChatView({ bot, logs, onSendPrompt }: Props) {
                 return (
                   <div key={block.key} className={`chat-row chat-row--${line.kind}`}>
                     <div className={`chat-bubble chat-bubble--${line.kind}`}>{line.text}</div>
+                  </div>
+                );
+              }
+
+              if (block.type === 'permission') {
+                const entry = permissions[block.requestId];
+
+                // A beszélgetés túléli a bot újraindítását, a kérés azonosítója viszont nem —
+                // ilyenkor csak a horgony-sor szövege marad meg, kártya nélkül.
+                if (!entry) {
+                  return (
+                    <div key={block.key} className="chat-row chat-row--info">
+                      <div className="chat-bubble chat-bubble--info">{block.fallbackText}</div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={block.key} className="chat-row chat-row--permission">
+                    <PermissionCard
+                      request={entry.request}
+                      decision={entry.decision}
+                      onRespond={onRespondPermission}
+                    />
                   </div>
                 );
               }

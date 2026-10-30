@@ -47,8 +47,14 @@ export function Sidebar({
           title={bot.name}
         >
           <span className={`status-dot status-dot--${bot.status}`} />
-          {bot.hasUnreadMessage && (
-            <span className="unread-badge" aria-label="Olvasatlan üzenet" />
+          {/* A jóváhagyásra várás erősebb jelzés, mint az olvasatlan üzenet: döntést igényel,
+              ezért elnyomja azt — nem jelenik meg két pötty egymás mellett. */}
+          {bot.pendingApprovalCount > 0 ? (
+            <span className="approval-badge" aria-label="Jóváhagyásra vár" />
+          ) : (
+            bot.hasUnreadMessage && (
+              <span className="unread-badge" aria-label="Olvasatlan üzenet" />
+            )
           )}
           {bot.avatarDataUrl ? (
             <img src={bot.avatarDataUrl} alt="" className="avatar__image" />

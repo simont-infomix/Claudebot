@@ -7,6 +7,9 @@ import type {
   EncodedAttachment,
   LogLine,
   MainTab,
+  PermissionAnswer,
+  PermissionDecision,
+  PermissionRequest,
   ScheduledTask,
   SettingsTab,
 } from './types';
@@ -41,6 +44,12 @@ export default function App() {
    *  esetleges hibaüzenet látható legyen. Az értéket csak a funkcionális frissítőkön belül
    *  olvassuk (a botList esemény kezelésekor), ezért itt nem kötjük le. */
   const [, setPendingDeleteBotId] = useState<string | null>(null);
+
+  /** Jóváhagyási kérések botId → requestId szerint (UC-018). Azért bot szerint csoportosítva,
+   *  mert egy másik bot kérése sem veszhet el amiatt, hogy épp nem azt nézzük. */
+  const [permissions, setPermissions] = useState<
+    Record<string, Record<string, { request: PermissionRequest; decision: PermissionDecision }>>
+  >({});
 
   // A hosztnak (WinForms) jelezzük a mentetlen módosítást, hogy alkalmazás-bezáráskor rá
   // tudjon kérdezni. Csak a Settings lapnak van piszkozat-állapota — a Feladatok nézet minden
@@ -93,11 +102,43 @@ export default function App() {
           if (event.botId === selectedBotId) {
             setLogs(event.lines);
           }
+          // A függő kérések a bot kiválasztásától FÜGGETLENÜL frissülnek: ez az autoritatív
+          // pillanatkép az adott botról.
+          setPermissions((prev) => ({
+            ...prev,
+            [event.botId]: Object.fromEntries(
+              event.pendingPermissions.map((r) => [r.requestId, { request: r, decision: 'pending' as const }]),
+            ),
+          }));
           break;
         case 'logAppended':
           if (event.botId === selectedBotId) {
             setLogs((prev) => [...prev, event.line]);
           }
+          break;
+        // A két permission-ág szándékosan NINCS a kiválasztott bothoz kötve: egy másik bot
+        // kérése is válaszra vár, és a kártyájának ott kell lennie, amikor rá váltunk.
+        case 'permissionRequest':
+          setPermissions((prev) => ({
+            ...prev,
+            [event.botId]: {
+              ...prev[event.botId],
+              [event.request.requestId]: { request: event.request, decision: 'pending' },
+            },
+          }));
+          break;
+        case 'permissionResolved':
+          setPermissions((prev) => {
+            const forBot = prev[event.botId];
+            const entry = forBot?.[event.requestId];
+            if (!entry) return prev;
+
+            // A lezárt kérést nem töröljük: a kártya a beszélgetésben marad, a döntéssel együtt.
+            return {
+              ...prev,
+              [event.botId]: { ...forBot, [event.requestId]: { ...entry, decision: event.decision } },
+            };
+          });
           break;
         case 'botStatusChanged':
           setBots((prev) =>
@@ -182,6 +223,7 @@ export default function App() {
         model: selectedBot.model,
         effort: selectedBot.effort,
         permissionMode: selectedBot.permissionMode,
+        interactiveApproval: selectedBot.interactiveApproval,
       },
       scheduledTasks,
     );
@@ -207,6 +249,11 @@ export default function App() {
     const displayText = [text, attachmentNote].filter(Boolean).join('\n\n');
     setLogs((prev) => [...prev, { kind: 'user', text: displayText }]);
     bridge.sendPrompt(selectedBotId, text, attachments);
+  }
+
+  function handleRespondPermission(requestId: string, answer: PermissionAnswer) {
+    if (!selectedBotId) return;
+    bridge.respondToPermission(selectedBotId, requestId, answer);
   }
 
   const selectedBot = bots.find((b) => b.id === selectedBotId) ?? null;
@@ -255,7 +302,13 @@ export default function App() {
         </div>
         <div className="content-area">
           {mainTab === 'chat' && (
-            <ChatView bot={selectedBot} logs={logs} onSendPrompt={handleSendPrompt} />
+            <ChatView
+              bot={selectedBot}
+              logs={logs}
+              permissions={selectedBotId ? permissions[selectedBotId] ?? {} : {}}
+              onRespondPermission={handleRespondPermission}
+              onSendPrompt={handleSendPrompt}
+            />
           )}
           {mainTab === 'tasks' && (
             <TasksView

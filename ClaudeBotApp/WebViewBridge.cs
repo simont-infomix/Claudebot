@@ -44,7 +44,46 @@ public class WebViewBridge
         _manager.BotListChanged += SendBotList;
         _manager.LogReceived += OnLogReceived;
         _manager.BotStatusChanged += OnBotStatusChanged;
+        _manager.PermissionRequested += OnPermissionRequested;
+        _manager.PermissionResolved += OnPermissionResolved;
     }
+
+    private void OnPermissionRequested(BotSession bot, PermissionRequest request)
+    {
+        PostEvent(new { type = "permissionRequest", botId = bot.Name, request = ToPermissionPayload(request) });
+    }
+
+    private void OnPermissionResolved(BotSession bot, PermissionRequest request)
+    {
+        PostEvent(new
+        {
+            type = "permissionResolved",
+            botId = bot.Name,
+            requestId = request.RequestId,
+            decision = DecisionToString(request.Decision),
+        });
+    }
+
+    private static object ToPermissionPayload(PermissionRequest request) => new
+    {
+        requestId = request.RequestId,
+        toolName = request.ToolName,
+        inputSummary = request.InputSummary,
+        inputJson = request.InputJson,
+        decisionReason = request.DecisionReason,
+        isScheduledRun = request.IsScheduledRun,
+        expiresAt = request.ExpiresAt.ToString("o"),
+    };
+
+    private static string DecisionToString(PermissionDecision decision) => decision switch
+    {
+        PermissionDecision.Pending => "pending",
+        PermissionDecision.Allowed => "allowed",
+        PermissionDecision.AllowedAlways => "allowedAlways",
+        PermissionDecision.Denied => "denied",
+        PermissionDecision.TimedOut => "timedOut",
+        _ => "cancelled",
+    };
 
     public void RequestExitConfirmation()
     {
@@ -171,6 +210,11 @@ public class WebViewBridge
                         var permissionMode = root.TryGetProperty("permissionMode", out var permissionModeProp)
                             ? permissionModeProp.GetString() : null;
 
+                        // Hiányzó mező esetén nem kapcsoljuk ki a jóváhagyás-kérést — a BotSession
+                        // alapértelmezése a bekapcsolt állapot.
+                        var interactiveApproval = !root.TryGetProperty("interactiveApproval", out var approvalProp)
+                            || approvalProp.ValueKind != JsonValueKind.False;
+
                         var scheduledTasks = new List<ScheduledTask>();
                         if (root.TryGetProperty("scheduledTasks", out var tasksProp) &&
                             tasksProp.ValueKind == JsonValueKind.Array)
@@ -183,7 +227,8 @@ public class WebViewBridge
 
                         var botId = settingsBotIdProp.GetString() ?? "";
                         var (success, error, newId) = _manager.ApplySettings(
-                            botId, settingsNameProp.GetString() ?? "", tools, model, effort, permissionMode, scheduledTasks);
+                            botId, settingsNameProp.GetString() ?? "", tools, model, effort, permissionMode,
+                            interactiveApproval, scheduledTasks);
 
                         if (!success)
                         {
@@ -235,6 +280,26 @@ public class WebViewBridge
                     if (root.TryGetProperty("confirmed", out var confirmedProp))
                     {
                         ExitConfirmResponse?.Invoke(confirmedProp.GetBoolean());
+                    }
+                    break;
+
+                case "respondToPermission":
+                    if (root.TryGetProperty("botId", out var permBotIdProp) &&
+                        root.TryGetProperty("requestId", out var permRequestIdProp) &&
+                        root.TryGetProperty("decision", out var permDecisionProp))
+                    {
+                        var decision = permDecisionProp.GetString() switch
+                        {
+                            "allow" => PermissionDecision.Allowed,
+                            "allowAlways" => PermissionDecision.AllowedAlways,
+                            _ => PermissionDecision.Denied,
+                        };
+
+                        // A visszatérési értéket szándékosan eldobjuk: ha a kérés időközben lejárt
+                        // vagy a bot újraindult, az normális versenyhelyzet (a felület a
+                        // permissionResolved eseményből már tudja a végleges állapotot).
+                        _manager.RespondToPermission(
+                            permBotIdProp.GetString() ?? "", permRequestIdProp.GetString() ?? "", decision);
                     }
                     break;
 
@@ -312,8 +377,10 @@ public class WebViewBridge
             model = b.Model,
             effort = b.Effort,
             permissionMode = b.PermissionMode,
+            interactiveApproval = b.InteractiveApproval,
             scheduledTasks = b.ScheduledTasks.Select(ToTaskPayload),
             hasUnreadMessage = b.HasUnreadMessage,
+            pendingApprovalCount = b.PendingPermissions.Count,
         });
 
         PostEvent(new { type = "botList", bots });
@@ -329,9 +396,19 @@ public class WebViewBridge
         {
             kind = KindToString(l.Kind),
             text = l.Text,
+            requestId = l.RequestId,
         });
 
-        PostEvent(new { type = "botLog", botId, lines });
+        // A függő kérések ugyanabban az üzenetben érkeznek, mint a beszélgetés — két külön
+        // eseménynél a sorrendjük nem lenne garantált, és a kártyák rövid időre rossz
+        // állapotban jelennének meg.
+        PostEvent(new
+        {
+            type = "botLog",
+            botId,
+            lines,
+            pendingPermissions = bot.PendingPermissions.Select(ToPermissionPayload),
+        });
     }
 
     private void SendBotDetails(string botId)
@@ -352,10 +429,15 @@ public class WebViewBridge
         // Csak a végleges bot-válasz és a hiba számít "üzenetnek" (UC-017) — a köztes
         // gondolkodás/eszközhívás (Thinking) és a saját, visszaidézett User-sor nem generál
         // jelzést. FIGYELEM: ez a metódus a bot-folyamat kimenetét olvasó háttérszálon fut.
-        if (line.Kind is LogKind.Assistant or LogKind.Error)
+        if (line.Kind is LogKind.Assistant or LogKind.Error or LogKind.Permission)
         {
+            // A jóváhagyási kérés akkor is figyelmet igényel, ha a felhasználó épp ezt a botot
+            // nézi — a válaszig nem tekintjük "elintézettnek", különben a tálcaikon jelzése
+            // azonnal eltűnne egy válaszra váró kérés mellől.
             var isCurrentlyViewed = _isWindowVisible && _viewedBotId == bot.Name;
-            var changed = isCurrentlyViewed ? bot.MarkSeen() : bot.MarkUnread();
+            var changed = isCurrentlyViewed && line.Kind != LogKind.Permission
+                ? bot.MarkSeen()
+                : bot.MarkUnread();
 
             if (changed)
             {
@@ -368,7 +450,7 @@ public class WebViewBridge
         {
             type = "logAppended",
             botId = bot.Name,
-            line = new { kind = KindToString(line.Kind), text = line.Text },
+            line = new { kind = KindToString(line.Kind), text = line.Text, requestId = line.RequestId },
         });
     }
 
@@ -483,6 +565,7 @@ public class WebViewBridge
         LogKind.Info => "info",
         LogKind.User => "user",
         LogKind.Thinking => "thinking",
+        LogKind.Permission => "permission",
         _ => "assistant",
     };
 

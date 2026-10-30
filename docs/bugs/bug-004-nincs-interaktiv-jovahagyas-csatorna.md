@@ -2,13 +2,17 @@
 id: bug-004
 title: "BUG-004 — Nincs mód interaktív tool-jóváhagyásra; a bot nem értesül az elutasításról"
 type: bug
-version: 0.1.0
+version: 0.2.0
 created: 2026-10-29
-updated: 2026-10-29
+updated: 2026-10-30
 references:
   - uc-009
+  - uc-018
+  - decision-04
   - architecture-c3-claude-code-cli-session
 ---
+
+> **Állapot: javítva (2026-10-30).** A megoldást lásd a dokumentum végén.
 
 ## Összefoglalás
 
@@ -67,3 +71,24 @@ Két, egymást nem kizáró irány (eldöntendő, melyik szükséges):
    `claudebot-stream.log` tartalmának vizsgálata szükséges — jelenleg egyetlen meglévő
    naplóban sem található ilyen esemény), majd megépíteni mind a bejövő kérés UI-beli
    megjelenítését, mind a kimenő válasz küldésének mechanizmusát.
+
+## Megoldás
+
+A 2. javaslat valósult meg; a rövid távú (opciók kivétele a felületről) ezzel tárgytalanná vált.
+
+A protokoll felderítése a telepített `claude.exe` binárisának elemzésével, majd éles méréssel
+történt. A kulcs a `--permission-prompt-tool stdio` kapcsoló, ami bekapcsolja a kétirányú
+control-protokollt: a CLI a stdout-ra küld egy `can_use_tool` kérést, és a stdin-en várja a
+döntést. Feltétele, hogy a stdin végig nyitva maradjon — lezárt stdin mellett a CLI némán
+elutasít. A részletes sémát és a döntés indoklását az ADR-0004 rögzíti, a felhasználói
+folyamatot az UC-018.
+
+A javítás során két, a jelentésben még nem ismert hiba is felszínre került:
+
+- **A megválaszolatlan jóváhagyás miatt félbemaradt ütemezett futás sikeresnek látszott.** A
+  `claude.exe` az elutasított eszközhívás után is `is_error: false`-szal zárja a kört; az
+  egyetlen jelzés a `result` sor `permission_denials` tömbje, amit a kód nem nézett. A
+  `BotTaskScheduler` ezért minden ilyen futást `Success`-ként könyvelt volna el.
+- **Az elutasított tool-hívás a felületen némán maradt** akkor is, ha interaktív jóváhagyásra
+  nincs mód: a `permission_denials` tartalma mostantól a csevegésben is megjelenik, így a
+  kapcsoló kikapcsolt állapotában is látszik, mi nem futott le és miért.

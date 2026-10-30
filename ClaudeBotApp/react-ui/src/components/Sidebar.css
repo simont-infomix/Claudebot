@@ -112,6 +112,20 @@
   box-shadow: 0 0 6px rgba(255, 83, 112, 0.6);
 }
 
+/* Jóváhagyásra váró kérés (UC-018) — ugyanott, mint az olvasatlan-jelző, de borostyán
+   színnel: nem hiba, hanem a felhasználóra váró döntés. */
+.approval-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--warning);
+  border: 1px solid var(--bg-base);
+  box-shadow: 0 0 6px rgba(255, 184, 106, 0.7);
+}
+
 @keyframes glow-pulse {
   0%,
   100% {

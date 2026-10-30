@@ -93,6 +93,7 @@ function draftFromBot(bot: Bot): BotSettingsDraft {
     model: bot.model,
     effort: bot.effort,
     permissionMode: bot.permissionMode,
+    interactiveApproval: bot.interactiveApproval,
   };
 }
 
@@ -102,6 +103,7 @@ function draftsEqual(a: BotSettingsDraft, b: BotSettingsDraft): boolean {
     a.model === b.model &&
     a.effort === b.effort &&
     a.permissionMode === b.permissionMode &&
+    a.interactiveApproval === b.interactiveApproval &&
     a.allowedTools.length === b.allowedTools.length &&
     a.allowedTools.every((t, i) => t === b.allowedTools[i])
   );
@@ -335,6 +337,22 @@ export function SettingsView({
                 onChange={(v) => updateDraft({ permissionMode: v })}
                 options={PERMISSION_MODE_OPTIONS}
               />
+            </div>
+
+            <div className="settings-toggle-field">
+              <label className="settings-toggle">
+                <input
+                  type="checkbox"
+                  className="settings-toggle__input"
+                  checked={draft.interactiveApproval}
+                  onChange={(e) => updateDraft({ interactiveApproval: e.target.checked })}
+                />
+                <span className="settings-toggle__text">Interaktív jóváhagyás kérése</span>
+              </label>
+              <p className="settings-toggle__hint">
+                Ha a bot olyan eszközt használna, ami nincs engedélyezve, a csevegésben
+                rákérdez. Kikapcsolva az ilyen hívások elutasításra kerülnek, kérdés nélkül.
+              </p>
             </div>
 
             <div className="settings-danger">

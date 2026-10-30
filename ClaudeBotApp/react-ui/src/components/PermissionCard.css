@@ -1,0 +1,178 @@
+/* Tool-jóváhagyási kártya a chat folyamában (UC-018). A --warning (borostyán) jelöli a
+   válaszra váró állapotot: nem hiba (danger) és nem siker, hanem figyelmet igénylő döntés. */
+.permission-card {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  border-left-width: 3px;
+  font-family: var(--font-ui);
+  transition: border-color var(--duration-standard) var(--ease-spring);
+}
+
+.permission-card--pending {
+  border-color: rgba(255, 184, 106, 0.3);
+  border-left-color: var(--warning);
+  box-shadow: 0 0 16px rgba(255, 184, 106, 0.12);
+}
+
+.permission-card--answered {
+  border-left-color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.permission-card--allowed,
+.permission-card--allowedAlways {
+  border-left-color: var(--success);
+}
+
+.permission-card--denied,
+.permission-card--timedOut {
+  border-left-color: var(--danger);
+}
+
+.permission-card--cancelled {
+  border-left-color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.permission-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.permission-card__icon {
+  font-size: 15px;
+}
+
+.permission-card__title {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.permission-card__title strong {
+  font-family: var(--font-mono);
+}
+
+.permission-card__badge {
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-full);
+  background: rgba(255, 184, 106, 0.14);
+  border: 1px solid rgba(255, 184, 106, 0.3);
+  color: var(--warning);
+  font-size: 11px;
+}
+
+.permission-card__summary {
+  margin: 0;
+  padding: var(--sp-2);
+  border-radius: var(--radius-md);
+  background: rgba(8, 12, 20, 0.5);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.permission-card__details-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  align-self: flex-start;
+  padding: var(--sp-1) 0;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.permission-card__details-toggle:hover {
+  color: var(--text-primary);
+}
+
+.permission-card__chevron {
+  display: inline-block;
+  transition: transform var(--duration-micro) var(--ease-spring);
+}
+
+.permission-card__chevron--open {
+  transform: rotate(90deg);
+}
+
+.permission-card__details {
+  margin: 0;
+  padding: var(--sp-2);
+  border-radius: var(--radius-md);
+  background: rgba(8, 12, 20, 0.5);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.permission-card__actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.permission-card__btn {
+  min-height: 36px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+  transition: filter var(--duration-micro) var(--ease-spring);
+}
+
+.permission-card__btn:hover {
+  filter: brightness(1.15);
+}
+
+.permission-card__btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+
+.permission-card__btn--allow {
+  background: linear-gradient(135deg, rgba(0, 232, 200, 1), rgba(75, 159, 255, 1));
+  border: none;
+  color: var(--text-inverse);
+  box-shadow: 0 0 0 1px rgba(0, 232, 200, 0.3), 0 0 16px rgba(0, 232, 200, 0.2);
+}
+
+.permission-card__btn--always {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  color: var(--text-primary);
+}
+
+.permission-card__btn--deny {
+  background: rgba(255, 83, 112, 0.15);
+  border: 1px solid rgba(255, 83, 112, 0.4);
+  color: var(--danger);
+}
+
+.permission-card__hint,
+.permission-card__outcome {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.permission-card__outcome {
+  font-style: italic;
+}

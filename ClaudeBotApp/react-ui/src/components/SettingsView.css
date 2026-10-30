@@ -274,6 +274,48 @@
   color: var(--text-secondary);
 }
 
+/* A kapcsoló a magyarázó szövegével egy oszlopban áll — a .settings-field vízszintes,
+   címke/vezérlő párokra szabott elrendezése ehhez nem illene. */
+.settings-toggle-field {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  cursor: pointer;
+}
+
+.settings-toggle__input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.settings-toggle__input:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+
+.settings-toggle__text {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.settings-toggle__hint {
+  margin: 0;
+  padding-left: calc(16px + var(--sp-2));
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 .settings-tools {
   width: 100%;
   max-width: 560px;

@@ -54,6 +54,17 @@
   justify-content: center;
 }
 
+/* A jóváhagyási kártya döntést vár, ezért a buborékoknál szélesebb sávot kap — de nem a
+   teljes szélességet, hogy a beszélgetés ritmusa megmaradjon. */
+.chat-row--permission {
+  justify-content: center;
+}
+
+.chat-row--permission > * {
+  width: 100%;
+  max-width: 560px;
+}
+
 .chat-bubble {
   max-width: 70%;
   padding: var(--sp-2) var(--sp-3);

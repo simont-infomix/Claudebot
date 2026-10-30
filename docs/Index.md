@@ -19,6 +19,7 @@
 | uc-015 | UC-015 — Feladat-futások állapotának áttekintése | use-case | docs/use-cases/uc-015-feladat-futasok-attekintese.md |
 | uc-016 | UC-016 — Bot végleges törlése | use-case | docs/use-cases/uc-016-bot-torlese.md |
 | uc-017 | UC-017 — Olvasatlan bot-üzenet jelzése | use-case | docs/use-cases/uc-017-olvasatlan-uzenet-jelzese.md |
+| uc-018 | UC-018 — Bot eszközhasználatának interaktív jóváhagyása | use-case | docs/use-cases/uc-018-tool-hasznalat-interaktiv-jovahagyasa.md |
 | architecture-c1 | Architektúra diagram — C1 (System Context) | architecture-c1 | docs/architecture-c1.md |
 | architecture-c2-claude-bot | Architektúra diagram — C2 (Container) – ClaudeBot | architecture-c2 | docs/architecture-c2/claude-bot.md |
 | architecture-c3-winforms-host | Architektúra diagram — C3 (Component) – WinForms Host | architecture-c3 | docs/architecture-c3/winforms-host.md |
@@ -29,6 +30,7 @@
 | decision-01 | ADR-0001 — Ütemezett feladatok futtatása pollozó időzítővel, a definícióból számolt következő futással | adr | docs/adr/0001-utemezett-feladatok-pollozo-idozitovel.md |
 | decision-02 | ADR-0002 — Az alkalmazás alapértelmezetten a Windowsszal indul, tálcaikonnal | adr | docs/adr/0002-windows-indulas-es-talcaikon.md |
 | decision-03 | ADR-0003 — Az ablak bezárása a tálcára rejt, az automatikus indítás kapcsolható | adr | docs/adr/0003-talcara-rejtes-es-kapcsolhato-autostart.md |
+| decision-04 | ADR-0004 — Interaktív tool-jóváhagyás a claude.exe stdio control-protokollján | adr | docs/adr/0004-interaktiv-jovahagyas-a-cli-control-protokollon.md |
 | bug-001 | BUG-001 — A bot-terminál (cmd + claude + MCP-szerver) nem áll le az app bezárásakor | bug | docs/bugs/bug-001-terminal-folyamat-nem-all-le-bezaraskor.md |
 | bug-002 | BUG-002 — Settings lapról elnavigálva nem jelez mentetlen módosítást | bug | docs/bugs/bug-002-settings-elnavigalas-mentetlen-valtozas-nelkul.md |
 | bug-003 | BUG-003 — A claudebot-stream.log Production buildben is íródik | bug | docs/bugs/bug-003-debug-naplo-production-buildben-is-irodik.md |

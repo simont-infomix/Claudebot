@@ -27,7 +27,13 @@ public class BotSessionManager
 
     /// <summary>Egy prompt feldolgozása befejeződött. A scheduler ebből tudja meg, hogy egy
     /// feladat-futás véget ért. Háttérszálon hívódik (ld. <see cref="BotSession.TurnCompleted"/>).</summary>
-    public event Action<BotSession, string, bool>? TurnCompleted;
+    public event Action<BotSession, TurnResult>? TurnCompleted;
+
+    /// <summary>Egy bot tool-jóváhagyást kér (UC-018). Háttérszálon hívódik.</summary>
+    public event Action<BotSession, PermissionRequest>? PermissionRequested;
+
+    /// <summary>Egy jóváhagyási kérés lezárult (válasz, lejárat vagy a folyamat leállása).</summary>
+    public event Action<BotSession, PermissionRequest>? PermissionResolved;
 
     public IReadOnlyList<BotSession> Bots => _bots;
 
@@ -148,6 +154,33 @@ public class BotSessionManager
         BotListChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Válasz egy tool-jóváhagyási kérésre (UC-018). "Mindig engedélyezd" esetén az eszköz
+    /// tartósan felkerül a bot engedélyezett listájára is.
+    /// Szándékosan NEM az <see cref="ApplySettings"/>-en keresztül: annak újraindítás-logikája
+    /// az AllowedTools bármely változására újraindítaná a botot, ami épp a futó kör (és a
+    /// beszélgetés kontextusának) elvesztését jelentené. Az új listát a claude.exe úgyis csak a
+    /// következő induláskor olvassa — a futó folyamatra a válaszba csomagolt session-szabály hat.
+    /// </summary>
+    public bool RespondToPermission(string botId, string requestId, PermissionDecision decision)
+    {
+        var bot = FindBot(botId);
+        if (bot == null)
+            return false;
+
+        if (decision == PermissionDecision.AllowedAlways)
+        {
+            var toolName = bot.PendingPermissions.FirstOrDefault(r => r.RequestId == requestId)?.ToolName;
+            if (!string.IsNullOrWhiteSpace(toolName) && !bot.AllowedTools.Contains(toolName))
+            {
+                bot.AllowedTools.Add(toolName);
+                PersistBot(bot);
+            }
+        }
+
+        return bot.RespondToPermission(requestId, decision);
+    }
+
     /// <summary>Induláskor minden aktív feladathoz kiszámolja a következő futást, ha még nincs
     /// (új feladat, vagy korábban szüneteltetett volt). A már beütemezett — akár múltbeli —
     /// időpontokat szándékosan érintetlenül hagyja, mert a kimaradt futások pótlásáról a
@@ -217,7 +250,7 @@ public class BotSessionManager
     /// azonosítót, hogy a UI követni tudja a kijelölést.</summary>
     public (bool success, string? error, string? newId) ApplySettings(
         string id, string newName, IReadOnlyList<string> allowedTools,
-        string? model, string? effort, string? permissionMode,
+        string? model, string? effort, string? permissionMode, bool interactiveApproval,
         IReadOnlyList<ScheduledTask> scheduledTasks)
     {
         var bot = FindBot(id);
@@ -263,6 +296,7 @@ public class BotSessionManager
             bot.Model != newModel ||
             bot.Effort != newEffort ||
             bot.PermissionMode != newPermissionMode ||
+            bot.InteractiveApproval != interactiveApproval ||
             !bot.AllowedTools.SequenceEqual(newAllowedTools);
 
         bot.DisplayName = trimmedName;
@@ -270,6 +304,7 @@ public class BotSessionManager
         bot.Model = newModel;
         bot.Effort = newEffort;
         bot.PermissionMode = newPermissionMode;
+        bot.InteractiveApproval = interactiveApproval;
         bot.ScheduledTasks = MergeScheduledTasks(bot.ScheduledTasks, scheduledTasks);
 
         SaveMeta(bot);
@@ -491,6 +526,10 @@ public class BotSessionManager
             {
                 bot.PermissionMode = meta.PermissionMode;
             }
+            if (meta?.InteractiveApproval != null)
+            {
+                bot.InteractiveApproval = meta.InteractiveApproval.Value;
+            }
             if (meta?.ScheduledTasks != null)
             {
                 bot.ScheduledTasks = meta.ScheduledTasks;
@@ -517,6 +556,7 @@ public class BotSessionManager
             Model = bot.Model,
             Effort = bot.Effort,
             PermissionMode = bot.PermissionMode,
+            InteractiveApproval = bot.InteractiveApproval,
             ScheduledTasks = bot.ScheduledTasks,
         };
         File.WriteAllText(GetMetaPath(bot), JsonSerializer.Serialize(meta, MetaJsonOptions));
@@ -529,6 +569,11 @@ public class BotSessionManager
         public string? Model { get; set; }
         public string? Effort { get; set; }
         public string? PermissionMode { get; set; }
+
+        /// <summary>Nullable, hogy a funkció bevezetése előtt mentett meta-fájlokban a hiánya
+        /// megkülönböztethető legyen a szándékos kikapcsolástól — ilyenkor az alapértelmezés él.</summary>
+        public bool? InteractiveApproval { get; set; }
+
         public List<ScheduledTask>? ScheduledTasks { get; set; }
     }
 
@@ -576,7 +621,9 @@ public class BotSessionManager
         var bot = new BotSession(name, folderPath);
         bot.LogReceived += line => LogReceived?.Invoke(bot, line);
         bot.StatusChanged += status => BotStatusChanged?.Invoke(bot, status);
-        bot.TurnCompleted += (uuid, isError) => TurnCompleted?.Invoke(bot, uuid, isError);
+        bot.TurnCompleted += result => TurnCompleted?.Invoke(bot, result);
+        bot.PermissionRequested += request => PermissionRequested?.Invoke(bot, request);
+        bot.PermissionResolved += request => PermissionResolved?.Invoke(bot, request);
         LoadMeta(bot);
         _bots.Add(bot);
 
