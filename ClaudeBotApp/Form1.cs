@@ -36,6 +36,13 @@ public partial class Form1 : Form
     {
         InitializeComponent();
         ApplyAppIcon();
+
+#if DEBUG
+        // Debug buildben nincs tálcára rejtés (ld. Form1_FormClosing) — a tálcaikon
+        // beépülése csak megzavarná a fejlesztői tesztelést (pl. több párhuzamosan futó
+        // példány esetén melyik a Debug, melyik a telepített Production).
+        trayIcon.Visible = false;
+#endif
     }
 
     /// <summary>
@@ -244,6 +251,13 @@ public partial class Form1 : Form
             is CloseReason.WindowsShutDown
             or CloseReason.TaskManagerClosing
             or CloseReason.ApplicationExitCall;
+
+#if DEBUG
+        // Debug buildben a tálcaikon ki van kapcsolva (ld. Form1 konstruktor) — tálcára
+        // rejtés helyett az X gomb is teljes kilépést jelent, nehogy fejlesztés közben
+        // láthatatlanul fusson tovább egy példány.
+        _exitRequested = true;
+#endif
 
         // Minden más bezárás (X gomb, Alt+F4, nyers WM_CLOSE) csak a tálcára rejt, nem lép ki —
         // így az ütemezett feladatok tovább futnak (ADR-0003). Kilépni a tálcaikon "Bezárás"
