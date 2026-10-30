@@ -6,7 +6,7 @@ version: 0.2.0
 created: 2026-10-30
 updated: 2026-10-30
 references:
-  - uc-009
+  - uc-019
 ---
 
 > **Állapot: javítva (2026-10-30).** A megoldást lásd a dokumentum végén.
@@ -67,5 +67,5 @@ teszttel, a `system/init` stream-json esemény `skills`/`agents` mezőit vizsgá
 szülő `Bots/.claude/skills/` és `Bots/.claude/agents/` tartalmát — ez nem a host valamilyen
 saját mechanizmusa, hanem a CLI natív, dokumentálatlan viselkedése. Emiatt a `GetBotDetails` a
 "Képességek" fülhöz mostantól ezt a közös mappát is beolvassa, `Shared = true` jelöléssel
-(lásd UC-009), a bot saját `.claude/skills`/`.claude/agents` tartalma mellett. A felületen a
+(lásd UC-019), a bot saját `.claude/skills`/`.claude/agents` tartalma mellett. A felületen a
 "Megosztott (minden bot eléri)" alcím különbözteti meg a bot-specifikus bejegyzésektől.
