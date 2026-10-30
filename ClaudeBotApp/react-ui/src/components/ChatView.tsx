@@ -9,15 +9,18 @@ import type {
 } from '../types';
 import { ChatInput } from './ChatInput';
 import { PermissionCard } from './PermissionCard';
+import { QuestionCard } from './QuestionCard';
 import './ChatView.css';
 
 interface Props {
   bot: Bot | null;
   logs: LogLine[];
-  /** A bot jóváhagyási kérései requestId szerint — a chat 'permission' sorai ebből kapják
-   *  az élő állapotukat (UC-018). */
+  /** A bot jóváhagyási kérései (és kérdései, UC-020) requestId szerint — a chat 'permission'
+   *  sorai ebből kapják az élő állapotukat (UC-018). */
   permissions: Record<string, { request: PermissionRequest; decision: PermissionDecision }>;
   onRespondPermission: (requestId: string, answer: PermissionAnswer) => void;
+  onAnswerQuestion: (requestId: string, answers: Record<string, string | string[]>) => void;
+  onSkipQuestion: (requestId: string) => void;
   onSendPrompt: (text: string, attachments: EncodedAttachment[]) => void;
 }
 
@@ -58,7 +61,15 @@ function buildBlocks(logs: LogLine[]): RenderBlock[] {
   return blocks;
 }
 
-export function ChatView({ bot, logs, permissions, onRespondPermission, onSendPrompt }: Props) {
+export function ChatView({
+  bot,
+  logs,
+  permissions,
+  onRespondPermission,
+  onAnswerQuestion,
+  onSkipQuestion,
+  onSendPrompt,
+}: Props) {
   const logEndRef = useRef<HTMLDivElement>(null);
   const [expandedOverride, setExpandedOverride] = useState<Record<string, boolean>>({});
 
@@ -102,13 +113,25 @@ export function ChatView({ bot, logs, permissions, onRespondPermission, onSendPr
                   );
                 }
 
+                // A bot vagy engedélyt kér (allow/allowAlways/deny), vagy — AskUserQuestion
+                // esetén — ténylegesen választ vár: ez két külön kártya-típus, mert a UI és a
+                // válasz-alak is eltér (gombok vs. kérdés+opciók).
                 return (
                   <div key={block.key} className="chat-row chat-row--permission">
-                    <PermissionCard
-                      request={entry.request}
-                      decision={entry.decision}
-                      onRespond={onRespondPermission}
-                    />
+                    {entry.request.questions && entry.request.questions.length > 0 ? (
+                      <QuestionCard
+                        request={entry.request}
+                        decision={entry.decision}
+                        onAnswer={onAnswerQuestion}
+                        onSkip={onSkipQuestion}
+                      />
+                    ) : (
+                      <PermissionCard
+                        request={entry.request}
+                        decision={entry.decision}
+                        onRespond={onRespondPermission}
+                      />
+                    )}
                   </div>
                 );
               }

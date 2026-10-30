@@ -21,6 +21,7 @@
 | uc-017 | UC-017 — Olvasatlan bot-üzenet jelzése | use-case | docs/use-cases/uc-017-olvasatlan-uzenet-jelzese.md |
 | uc-018 | UC-018 — Bot eszközhasználatának interaktív jóváhagyása | use-case | docs/use-cases/uc-018-tool-hasznalat-interaktiv-jovahagyasa.md |
 | uc-019 | UC-019 — Megosztott skill vagy sub agent felvétele minden bot számára | use-case | docs/use-cases/uc-019-megosztott-skill-sub-agent-felvetele.md |
+| uc-020 | UC-020 — Bot kérdésének megválaszolása (AskUserQuestion) | use-case | docs/use-cases/uc-020-bot-kerdesenek-megvalaszolasa.md |
 | architecture-c1 | Architektúra diagram — C1 (System Context) | architecture-c1 | docs/architecture-c1.md |
 | architecture-c2-claude-bot | Architektúra diagram — C2 (Container) – ClaudeBot | architecture-c2 | docs/architecture-c2/claude-bot.md |
 | architecture-c3-winforms-host | Architektúra diagram — C3 (Component) – WinForms Host | architecture-c3 | docs/architecture-c3/winforms-host.md |

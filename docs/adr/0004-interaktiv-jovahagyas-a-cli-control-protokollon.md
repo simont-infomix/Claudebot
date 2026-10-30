@@ -2,12 +2,13 @@
 id: decision-04
 title: "ADR-0004 — Interaktív tool-jóváhagyás a claude.exe stdio control-protokollján"
 type: adr
-version: 0.1.0
+version: 0.2.0
 created: 2026-10-30
 updated: 2026-10-30
 references:
   - uc-009
   - uc-018
+  - uc-020
   - decision-01
   - architecture-c3-claude-code-cli-session
 ---
@@ -49,6 +50,26 @@ A felderítés eredménye (mért, nem feltételezett):
   `permission_denials` tömbje.
 - A válaszba csomagolt `updatedPermissions` szabály a **futó folyamatra**, újraindítás nélkül
   érvényesül (igazolva: engedélyezés után egy másik parancs már nem váltott ki kérést).
+
+**Kiegészítés (2026-10-30, UC-020):** ugyanez a `can_use_tool` csatorna hordozza az
+`AskUserQuestion` eszközt is — ez nem biztonsági jóváhagyás, hanem a bot ténylegesen választ vár
+a felhasználótól. Éles méréssel igazolva:
+
+- A kérés megkülönböztető jele a `requires_user_interaction: true` mező (a `tool_name` mellett).
+  Az `input.questions` tömb tartalmazza a kérdés(eke)t: `{question, header, options:
+  [{label, description}], multiSelect}`.
+- A válasz ugyanaz az `{"behavior":"allow","updatedInput":{...}}` alak, kiegészítve egy
+  `answers` mezővel: kulcsa a kérdés **pontos szövege**, értéke a választott opció `label`-je
+  (egyszeri választásnál sima string, `multiSelect` esetén tömb).
+- **Válasz nélkül** (kihagyás vagy lejárat) az eredeti inputot változatlanul, `answers` nélkül
+  visszaküldve a CLI **saját, kész szöveggel** ("The user did not answer the questions") zárja
+  le a tool-hívást, és a kör **sikeresen**, `is_error:false`-szal fejeződik be — ez SZÁNDÉKOSAN
+  eltér az általános jóváhagyás elutasításától (ahol a `deny` és a kör-sikertelenség a helyes
+  válasz): egy megválaszolatlan kérdés nem jelenti, hogy a bot ne tehette volna fel.
+- **`InteractiveApproval=false` mellett nincs beragadás-kockázat:** élesben igazolva, hogy ebben
+  az esetben a modell a `ToolSearch`-csel sem találja az `AskUserQuestion`-t ("Nincs elérhető
+  ... eszköz ebben a környezetben"), és magától egyszerű szöveges kérdésre vált — a csatorna
+  hiánya nem fagyasztja le a kört.
 
 ## Decision
 
@@ -132,4 +153,5 @@ eszközt engedélyezte.
 
 `ClaudeBotApp/BotSession.cs`, `ClaudeBotApp/PermissionRequest.cs`,
 `ClaudeBotApp/BotTaskScheduler.cs`, `ClaudeBotApp/react-ui/src/components/PermissionCard.tsx`,
+`ClaudeBotApp/react-ui/src/components/QuestionCard.tsx`,
 `docs/bugs/bug-004-nincs-interaktiv-jovahagyas-csatorna.md`.

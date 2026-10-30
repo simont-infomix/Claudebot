@@ -16,13 +16,30 @@ public enum PermissionDecision
     /// <summary>A felhasználó elutasította.</summary>
     Denied,
 
-    /// <summary>Nem érkezett válasz a határidőig, ezért automatikusan elutasításra került.</summary>
+    /// <summary>A felhasználó megválaszolta a bot kérdését (AskUserQuestion, UC-020).</summary>
+    Answered,
+
+    /// <summary>A felhasználó explicit kihagyta a kérdést — a bot "nem válaszolt" jelzést kap,
+    /// de ez (az általános jóváhagyási kéréssel ellentétben) NEM számít a kör sikertelenségének:
+    /// a claude.exe ezt a tool saját, kész szövegével ("The user did not answer...") zárja le.</summary>
+    Skipped,
+
+    /// <summary>Nem érkezett válasz a határidőig. Jóváhagyási kérésnél ez automatikus
+    /// elutasítást jelent (a kör sikertelen lesz); kérdésnél (AskUserQuestion) a <see cref="Skipped"/>-del
+    /// azonos módon kezelve — a kör sikeresen lezárul, csak válasz nélkül.</summary>
     TimedOut,
 
     /// <summary>A bot folyamata leállt/újraindult, mielőtt válasz született volna — a
     /// kérés azonosítója ezzel értelmét vesztette, választ már nem lehet rá küldeni.</summary>
     Cancelled,
 }
+
+/// <summary>Egy AskUserQuestion kérdés egy választható opciója.</summary>
+public sealed record UserQuestionOption(string Label, string? Description);
+
+/// <summary>Egy AskUserQuestion kérdés — a bot nem engedélyt kér, hanem ténylegesen választ vár
+/// a felhasználótól, mielőtt folytatná a kört.</summary>
+public sealed record UserQuestion(string Question, string? Header, IReadOnlyList<UserQuestionOption> Options, bool MultiSelect);
 
 /// <summary>
 /// A claude.exe egy `can_use_tool` control-kérése: a bot egy olyan eszközt használna, amire
@@ -51,6 +68,15 @@ public sealed class PermissionRequest
 
     /// <summary>Ütemezett feladat köre-e — ez dönti el a válaszadási határidőt is.</summary>
     public bool IsScheduledRun { get; init; }
+
+    /// <summary>Igaz, ha ehhez a kéréshez ténylegesen emberi válasz kell, nem csak
+    /// engedélyezés/elutasítás (a claude.exe `requires_user_interaction` mezője — jelenleg az
+    /// AskUserQuestion tool esetén igaz).</summary>
+    public bool RequiresUserInteraction { get; init; }
+
+    /// <summary>Csak akkor nem null, ha <see cref="RequiresUserInteraction"/> igaz és a tool az
+    /// AskUserQuestion — a strukturált kérdések, amikre válaszolni kell.</summary>
+    public IReadOnlyList<UserQuestion>? Questions { get; init; }
 
     public DateTime CreatedAt { get; init; }
 

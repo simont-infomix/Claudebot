@@ -256,6 +256,16 @@ export default function App() {
     bridge.respondToPermission(selectedBotId, requestId, answer);
   }
 
+  function handleAnswerQuestion(requestId: string, answers: Record<string, string | string[]>) {
+    if (!selectedBotId) return;
+    bridge.answerUserQuestion(selectedBotId, requestId, answers);
+  }
+
+  function handleSkipQuestion(requestId: string) {
+    if (!selectedBotId) return;
+    bridge.skipUserQuestion(selectedBotId, requestId);
+  }
+
   const selectedBot = bots.find((b) => b.id === selectedBotId) ?? null;
 
   return (
@@ -307,6 +317,8 @@ export default function App() {
               logs={logs}
               permissions={selectedBotId ? permissions[selectedBotId] ?? {} : {}}
               onRespondPermission={handleRespondPermission}
+              onAnswerQuestion={handleAnswerQuestion}
+              onSkipQuestion={handleSkipQuestion}
               onSendPrompt={handleSendPrompt}
             />
           )}

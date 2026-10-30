@@ -73,6 +73,14 @@ public class WebViewBridge
         decisionReason = request.DecisionReason,
         isScheduledRun = request.IsScheduledRun,
         expiresAt = request.ExpiresAt.ToString("o"),
+        requiresUserInteraction = request.RequiresUserInteraction,
+        questions = request.Questions?.Select(q => new
+        {
+            question = q.Question,
+            header = q.Header,
+            multiSelect = q.MultiSelect,
+            options = q.Options.Select(o => new { label = o.Label, description = o.Description }),
+        }),
     };
 
     private static string DecisionToString(PermissionDecision decision) => decision switch
@@ -81,6 +89,8 @@ public class WebViewBridge
         PermissionDecision.Allowed => "allowed",
         PermissionDecision.AllowedAlways => "allowedAlways",
         PermissionDecision.Denied => "denied",
+        PermissionDecision.Answered => "answered",
+        PermissionDecision.Skipped => "skipped",
         PermissionDecision.TimedOut => "timedOut",
         _ => "cancelled",
     };
@@ -300,6 +310,40 @@ public class WebViewBridge
                         // permissionResolved eseményből már tudja a végleges állapotot).
                         _manager.RespondToPermission(
                             permBotIdProp.GetString() ?? "", permRequestIdProp.GetString() ?? "", decision);
+                    }
+                    break;
+
+                case "answerUserQuestion":
+                    if (root.TryGetProperty("botId", out var answerBotIdProp) &&
+                        root.TryGetProperty("requestId", out var answerRequestIdProp) &&
+                        root.TryGetProperty("answers", out var answersProp) &&
+                        answersProp.ValueKind == JsonValueKind.Object)
+                    {
+                        var answers = new Dictionary<string, IReadOnlyList<string>>();
+                        foreach (var prop in answersProp.EnumerateObject())
+                        {
+                            if (prop.Value.ValueKind == JsonValueKind.Array)
+                            {
+                                answers[prop.Name] = prop.Value.EnumerateArray()
+                                    .Select(v => v.GetString() ?? "")
+                                    .ToList();
+                            }
+                            else if (prop.Value.ValueKind == JsonValueKind.String)
+                            {
+                                answers[prop.Name] = new List<string> { prop.Value.GetString() ?? "" };
+                            }
+                        }
+
+                        _manager.AnswerUserQuestion(
+                            answerBotIdProp.GetString() ?? "", answerRequestIdProp.GetString() ?? "", answers);
+                    }
+                    break;
+
+                case "skipUserQuestion":
+                    if (root.TryGetProperty("botId", out var skipBotIdProp) &&
+                        root.TryGetProperty("requestId", out var skipRequestIdProp))
+                    {
+                        _manager.SkipUserQuestion(skipBotIdProp.GetString() ?? "", skipRequestIdProp.GetString() ?? "");
                     }
                     break;
 

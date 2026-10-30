@@ -191,6 +191,20 @@ public class BotSessionManager
         return bot.RespondToPermission(requestId, decision);
     }
 
+    /// <summary>Válasz egy bot AskUserQuestion-kérdésére (UC-020).</summary>
+    public bool AnswerUserQuestion(string botId, string requestId, IReadOnlyDictionary<string, IReadOnlyList<string>> answers)
+    {
+        var bot = FindBot(botId);
+        return bot != null && bot.AnswerUserQuestion(requestId, answers);
+    }
+
+    /// <summary>A felhasználó explicit kihagyja a bot kérdését (UC-020).</summary>
+    public bool SkipUserQuestion(string botId, string requestId)
+    {
+        var bot = FindBot(botId);
+        return bot != null && bot.SkipUserQuestion(requestId);
+    }
+
     /// <summary>Induláskor minden aktív feladathoz kiszámolja a következő futást, ha még nincs
     /// (új feladat, vagy korábban szüneteltetett volt). A már beütemezett — akár múltbeli —
     /// időpontokat szándékosan érintetlenül hagyja, mert a kimaradt futások pótlásáról a

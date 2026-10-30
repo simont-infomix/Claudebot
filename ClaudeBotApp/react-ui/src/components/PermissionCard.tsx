@@ -13,6 +13,10 @@ const DECISION_LABEL: Record<Exclude<PermissionDecision, 'pending'>, string> = {
   allowed: 'Engedélyezve',
   allowedAlways: 'Engedélyezve — mostantól nem kérdez rá',
   denied: 'Elutasítva',
+  // Ez a két állapot gyakorlatban csak kérdés-típusú kéréseknél (QuestionCard) fordul elő —
+  // itt csak a Record teljessége miatt szerepel.
+  answered: 'Megválaszolva',
+  skipped: 'Kihagyva',
   timedOut: 'Nem érkezett válasz időben — automatikusan elutasítva',
   cancelled: 'A kérés érvénytelenné vált (a bot leállt vagy újraindult)',
 };

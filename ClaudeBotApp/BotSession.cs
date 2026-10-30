@@ -464,6 +464,20 @@ public class BotSession
             isScheduled = owningUuid != null && _scheduledTurns.Contains(owningUuid);
         }
 
+        // A claude.exe ezzel jelzi, hogy ez nem egy biztonsági jóváhagyás, hanem ténylegesen
+        // emberi választ vár (pl. AskUserQuestion) — allow/deny helyett kérdés-UI kell neki.
+        var requiresInteraction = request.TryGetProperty("requires_user_interaction", out var riProp)
+            && riProp.ValueKind == JsonValueKind.True;
+
+        IReadOnlyList<UserQuestion>? questions = null;
+        if (requiresInteraction && toolName == "AskUserQuestion" &&
+            request.TryGetProperty("input", out var inputForQuestions) &&
+            inputForQuestions.TryGetProperty("questions", out var questionsEl) &&
+            questionsEl.ValueKind == JsonValueKind.Array)
+        {
+            questions = ParseQuestions(questionsEl);
+        }
+
         var now = DateTime.Now;
         var permissionRequest = new PermissionRequest
         {
@@ -476,6 +490,8 @@ public class BotSession
                 : null,
             OwningPromptUuid = owningUuid,
             IsScheduledRun = isScheduled,
+            RequiresUserInteraction = requiresInteraction,
+            Questions = questions,
             CreatedAt = now,
             ExpiresAt = now + (isScheduled ? ScheduledApprovalTimeout : ManualApprovalTimeout),
         };
@@ -489,10 +505,51 @@ public class BotSession
 
         // A chat-folyamba egy horgony-sor kerül: ez adja a kártya HELYÉT az időrendben, az élő
         // állapotát (gombok, döntés) viszont a felület a requestId alapján külön kapja meg.
-        var label = string.IsNullOrWhiteSpace(summary) ? toolName : $"{toolName}: {summary}";
-        RaiseLog(new LogLine(LogKind.Permission, $"🔐 Engedélyt kér — {label}", requestId));
+        var anchorText = questions != null
+            ? "❓ Kérdést tesz fel — " + string.Join(" / ", questions.Select(q => q.Question))
+            : "🔐 Engedélyt kér — " + (string.IsNullOrWhiteSpace(summary) ? toolName : $"{toolName}: {summary}");
+        RaiseLog(new LogLine(LogKind.Permission, anchorText, requestId));
 
         PermissionRequested?.Invoke(permissionRequest);
+    }
+
+    private static List<UserQuestion> ParseQuestions(JsonElement questionsEl)
+    {
+        var result = new List<UserQuestion>();
+
+        foreach (var q in questionsEl.EnumerateArray())
+        {
+            if (q.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var questionText = q.TryGetProperty("question", out var qp) ? qp.GetString() : null;
+            if (string.IsNullOrEmpty(questionText))
+                continue;
+
+            var header = q.TryGetProperty("header", out var hp) ? hp.GetString() : null;
+            var multiSelect = q.TryGetProperty("multiSelect", out var msp) && msp.ValueKind == JsonValueKind.True;
+
+            var options = new List<UserQuestionOption>();
+            if (q.TryGetProperty("options", out var optsEl) && optsEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var o in optsEl.EnumerateArray())
+                {
+                    if (o.ValueKind != JsonValueKind.Object)
+                        continue;
+
+                    var label = o.TryGetProperty("label", out var lp) ? lp.GetString() : null;
+                    if (string.IsNullOrEmpty(label))
+                        continue;
+
+                    var description = o.TryGetProperty("description", out var dp) ? dp.GetString() : null;
+                    options.Add(new UserQuestionOption(label, description));
+                }
+            }
+
+            result.Add(new UserQuestion(questionText, header, options, multiSelect));
+        }
+
+        return result;
     }
 
     /// <summary>A kért művelet lényegét adó mező — a beszédes kulcsokat előnyben részesítve,
@@ -607,13 +664,80 @@ public class BotSession
         return true;
     }
 
+    /// <summary>Válasz egy AskUserQuestion-kérdésre (UC-020). A <paramref name="answers"/> kulcsa a
+    /// kérdés pontos szövege (ahogy a claude.exe küldte), az érték a választott opció(k) "label"-je
+    /// — a claude.exe maga is így korrelálja a választ a kérdéshez. Egy kérdésre adott egyetlen
+    /// válasz sima stringként, több válasz (multiSelect) tömbként megy ki.</summary>
+    public bool AnswerUserQuestion(string requestId, IReadOnlyDictionary<string, IReadOnlyList<string>> answers)
+    {
+        PermissionRequest? request;
+        lock (_permGate)
+        {
+            if (!_pending.TryGetValue(requestId, out request) || request.Decision != PermissionDecision.Pending)
+                return false;
+
+            request.Decision = PermissionDecision.Answered;
+            _pending.Remove(requestId);
+        }
+
+        using var inputDoc = JsonDocument.Parse(request.InputJson);
+        var updatedInput = new Dictionary<string, object?>();
+        foreach (var prop in inputDoc.RootElement.EnumerateObject())
+        {
+            updatedInput[prop.Name] = prop.Value.Clone();
+        }
+        updatedInput["answers"] = answers.ToDictionary(
+            kv => kv.Key,
+            kv => (object)(kv.Value.Count == 1 ? kv.Value[0] : kv.Value));
+
+        SendControlResponse(requestId, new { behavior = "allow", updatedInput });
+
+        // Sikeres válasz: a kör rendesen folytatódik, nem számít sikertelenségnek.
+        RaiseLog(LogKind.Info, DescribeDecision(request, PermissionDecision.Answered));
+        PermissionResolved?.Invoke(request);
+        return true;
+    }
+
+    /// <summary>A felhasználó explicit kihagyja a kérdést (UC-020) — lásd <see cref="RespondUnanswered"/>.</summary>
+    public bool SkipUserQuestion(string requestId) => RespondUnanswered(requestId, PermissionDecision.Skipped);
+
+    /// <summary>Válasz nélküli lezárás egy kérdésre (kihagyás vagy lejárat): az eredeti inputot
+    /// változatlanul, `answers` nélkül küldjük vissza `allow`-val — ezt a claude.exe a tool saját,
+    /// kész szövegével ("The user did not answer the questions") zárja le, a kör sikeresen
+    /// folytatódik. Ez SZÁNDÉKOSAN eltér az általános jóváhagyási kérés elutasításától (ott a
+    /// `deny` és a kör-sikertelenség a helyes válasz) — egy megválaszolatlan kérdés nem jelenti
+    /// azt, hogy a bot ne tehette volna fel.</summary>
+    private bool RespondUnanswered(string requestId, PermissionDecision decision)
+    {
+        PermissionRequest? request;
+        lock (_permGate)
+        {
+            if (!_pending.TryGetValue(requestId, out request) || request.Decision != PermissionDecision.Pending)
+                return false;
+
+            request.Decision = decision;
+            _pending.Remove(requestId);
+        }
+
+        using var inputDoc = JsonDocument.Parse(request.InputJson);
+        SendControlResponse(requestId, new { behavior = "allow", updatedInput = inputDoc.RootElement.Clone() });
+
+        RaiseLog(LogKind.Info, DescribeDecision(request, decision));
+        PermissionResolved?.Invoke(request);
+        return true;
+    }
+
     private static string DescribeDecision(PermissionRequest request, PermissionDecision decision) => decision switch
     {
         PermissionDecision.Allowed => $"✅ Engedélyezve: {request.ToolName}",
         PermissionDecision.AllowedAlways => $"✅ Engedélyezve és felvéve az engedélyezett eszközök közé: {request.ToolName}",
         PermissionDecision.Denied => $"⛔ Elutasítva: {request.ToolName}",
+        PermissionDecision.Answered => "✅ Válasz elküldve",
+        PermissionDecision.Skipped => "➡ Kihagyva — nem érkezett válasz a kérdésre",
+        PermissionDecision.TimedOut when request.RequiresUserInteraction =>
+            "⏰ Nem érkezett válasz időben — a kérdés megválaszolatlan maradt",
         PermissionDecision.TimedOut => $"⏰ Nem érkezett válasz időben, automatikusan elutasítva: {request.ToolName}",
-        _ => $"⚠ A jóváhagyási kérés érvénytelenné vált: {request.ToolName}",
+        _ => $"⚠ A kérés érvénytelenné vált: {request.ToolName}",
     };
 
     /// <summary>Az elutasítás okát a kör végéig eltesszük, mert a claude.exe az elutasított
@@ -662,10 +786,19 @@ public class BotSession
 
         foreach (var request in overdue)
         {
-            RespondToPermission(
-                request.RequestId,
-                PermissionDecision.TimedOut,
-                "A felhasználó nem válaszolt a jóváhagyási kérésre a megadott határidőn belül.");
+            // Egy kérdés (AskUserQuestion) lejárata nem jóváhagyás-elutasítás, hanem válasz
+            // nélküli lezárás — a kör emiatt nem válik sikertelenné (ld. RespondUnanswered).
+            if (request.RequiresUserInteraction)
+            {
+                RespondUnanswered(request.RequestId, PermissionDecision.TimedOut);
+            }
+            else
+            {
+                RespondToPermission(
+                    request.RequestId,
+                    PermissionDecision.TimedOut,
+                    "A felhasználó nem válaszolt a jóváhagyási kérésre a megadott határidőn belül.");
+            }
         }
     }
 

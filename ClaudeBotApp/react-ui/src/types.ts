@@ -111,14 +111,32 @@ export type PermissionDecision =
   | 'allowed'
   | 'allowedAlways'
   | 'denied'
+  /** A felhasználó megválaszolta a bot kérdését (AskUserQuestion, UC-020). */
+  | 'answered'
+  /** A felhasználó explicit kihagyta a kérdést — nem a kör sikertelensége. */
+  | 'skipped'
   | 'timedOut'
   /** A bot folyamata leállt/újraindult, mielőtt válasz született volna. */
   | 'cancelled';
 
-/** A felhasználó három lehetséges válasza egy kérésre. */
+/** A felhasználó három lehetséges válasza egy (nem kérdés-jellegű) kérésre. */
 export type PermissionAnswer = 'allow' | 'allowAlways' | 'deny';
 
-/** A bot egy olyan eszközt használna, amire nincs előzetes engedélye (UC-018). */
+export interface UserQuestionOption {
+  label: string;
+  description: string | null;
+}
+
+/** Egy AskUserQuestion kérdés — a bot nem engedélyt kér, ténylegesen választ vár. */
+export interface UserQuestion {
+  question: string;
+  header: string | null;
+  multiSelect: boolean;
+  options: UserQuestionOption[];
+}
+
+/** A bot egy olyan eszközt használna, amire nincs előzetes engedélye (UC-018), vagy — ha
+ *  `requiresUserInteraction` igaz — ténylegesen választ vár a felhasználótól (UC-020). */
 export interface PermissionRequest {
   requestId: string;
   toolName: string;
@@ -131,6 +149,9 @@ export interface PermissionRequest {
   isScheduledRun: boolean;
   /** ISO-8601; eddig vár a kérés, utána automatikus elutasítás. */
   expiresAt: string;
+  requiresUserInteraction: boolean;
+  /** Csak akkor van kitöltve, ha `requiresUserInteraction` igaz és a tool AskUserQuestion. */
+  questions?: UserQuestion[];
 }
 
 export interface EncodedAttachment {
@@ -155,6 +176,9 @@ export type HostRequest =
   /** Melyik bot csevegése van ténylegesen a képernyőn — null, ha egyik sincs (UC-017). */
   | { type: 'setViewedBot'; botId: string | null }
   | { type: 'respondToPermission'; botId: string; requestId: string; decision: PermissionAnswer }
+  /** answers kulcsa a kérdés szövege, értéke a választott opció(k) label-je — ld. UC-020. */
+  | { type: 'answerUserQuestion'; botId: string; requestId: string; answers: Record<string, string | string[]> }
+  | { type: 'skipUserQuestion'; botId: string; requestId: string }
   | { type: 'sendPrompt'; botId: string; text: string; attachments: EncodedAttachment[] };
 
 export type HostEvent =

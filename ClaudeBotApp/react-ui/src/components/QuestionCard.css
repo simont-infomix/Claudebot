@@ -1,0 +1,175 @@
+/* AskUserQuestion kártya a chat folyamában (UC-020). A --warning (borostyán) jelöli a
+   válaszra váró állapotot, ugyanúgy mint a PermissionCard-nál — itt viszont a felhasználó
+   nem enged/tilt, hanem ténylegesen választ ad. */
+.question-card {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  border-left-width: 3px;
+  font-family: var(--font-ui);
+  transition: border-color var(--duration-standard) var(--ease-spring);
+}
+
+.question-card--pending {
+  border-color: rgba(255, 184, 106, 0.3);
+  border-left-color: var(--warning);
+  box-shadow: 0 0 16px rgba(255, 184, 106, 0.12);
+}
+
+.question-card--answered {
+  border-left-color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.question-card--skipped,
+.question-card--timedOut {
+  border-left-color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.question-card--cancelled {
+  border-left-color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.question-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.question-card__icon {
+  font-size: 15px;
+}
+
+.question-card__title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.question-card__badge {
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-full);
+  background: rgba(255, 184, 106, 0.14);
+  border: 1px solid rgba(255, 184, 106, 0.3);
+  color: var(--warning);
+  font-size: 11px;
+}
+
+.question-card__question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.question-card__header-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.question-card__text {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.question-card__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.question-card__option {
+  min-height: 36px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+  transition: filter var(--duration-micro) var(--ease-spring), border-color var(--duration-micro) var(--ease-spring);
+}
+
+.question-card__option:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.question-card__option:disabled {
+  cursor: default;
+}
+
+.question-card__option:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+
+.question-card__option--selected {
+  background: linear-gradient(135deg, rgba(0, 232, 200, 0.22), rgba(75, 159, 255, 0.22));
+  border-color: rgba(0, 232, 200, 0.5);
+  color: var(--text-primary);
+}
+
+.question-card__actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.question-card__btn {
+  min-height: 36px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+  transition: filter var(--duration-micro) var(--ease-spring);
+}
+
+.question-card__btn:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.question-card__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.question-card__btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+
+.question-card__btn--submit {
+  background: linear-gradient(135deg, rgba(0, 232, 200, 1), rgba(75, 159, 255, 1));
+  border: none;
+  color: var(--text-inverse);
+  box-shadow: 0 0 0 1px rgba(0, 232, 200, 0.3), 0 0 16px rgba(0, 232, 200, 0.2);
+}
+
+.question-card__btn--skip {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  color: var(--text-secondary);
+}
+
+.question-card__hint,
+.question-card__outcome {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.question-card__outcome {
+  font-style: italic;
+}

@@ -92,6 +92,16 @@ class BridgeClient {
     this.send({ type: 'respondToPermission', botId, requestId, decision });
   }
 
+  /** Válasz egy bot AskUserQuestion-kérdésére (UC-020). */
+  answerUserQuestion(botId: string, requestId: string, answers: Record<string, string | string[]>): void {
+    this.send({ type: 'answerUserQuestion', botId, requestId, answers });
+  }
+
+  /** A felhasználó explicit kihagyja a kérdést — nincs válasz, de a kör nem válik sikertelenné. */
+  skipUserQuestion(botId: string, requestId: string): void {
+    this.send({ type: 'skipUserQuestion', botId, requestId });
+  }
+
   sendPrompt(botId: string, text: string, attachments: EncodedAttachment[] = []): void {
     this.send({ type: 'sendPrompt', botId, text, attachments });
   }
