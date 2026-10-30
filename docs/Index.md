@@ -36,3 +36,4 @@
 | bug-003 | BUG-003 — A claudebot-stream.log Production buildben is íródik | bug | docs/bugs/bug-003-debug-naplo-production-buildben-is-irodik.md |
 | bug-004 | BUG-004 — Nincs mód interaktív tool-jóváhagyásra; a bot nem értesül az elutasításról | bug | docs/bugs/bug-004-nincs-interaktiv-jovahagyas-csatorna.md |
 | bug-005 | BUG-005 — Tálcára rejtett állapotban újraindítva az app párhuzamos második példány indul | bug | docs/bugs/bug-005-tobbszoros-inditas-parhuzamos-instance.md |
+| bug-006 | BUG-006 — A Bots/ mappa minden alkönyvtárát (rejtett mappát is) botnak tölti be | bug | docs/bugs/bug-006-rejtett-mappak-botkent-toltodnek-be.md |

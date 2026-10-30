@@ -419,8 +419,8 @@ public class WebViewBridge
             type = "botDetails",
             botId,
             agentDefinition,
-            skills = skills.Select(c => new { name = c.Name, description = c.Description }),
-            subAgents = subAgents.Select(c => new { name = c.Name, description = c.Description }),
+            skills = skills.Select(c => new { name = c.Name, description = c.Description, shared = c.Shared }),
+            subAgents = subAgents.Select(c => new { name = c.Name, description = c.Description, shared = c.Shared }),
         });
     }
 

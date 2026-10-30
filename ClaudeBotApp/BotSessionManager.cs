@@ -5,8 +5,10 @@ using System.Text.Json.Serialization;
 namespace ClaudeBotApp;
 
 /// <summary>Egy skill vagy sub agent neve és a SKILL.md/agent .md frontmatterjéből kiolvasott
-/// rövid leírása — a "Képességek" tab chipjeinek tooltipjéhez.</summary>
-public record CapabilityInfo(string Name, string? Description);
+/// rövid leírása — a "Képességek" tab chipjeinek tooltipjéhez. A <see cref="Shared"/> mondja meg,
+/// hogy a `Bots/.claude/` közös mappából származik-e (minden bot látja), vagy az adott bot saját
+/// workspace-éből.</summary>
+public record CapabilityInfo(string Name, string? Description, bool Shared);
 
 public class BotSessionManager
 {
@@ -48,7 +50,15 @@ public class BotSessionManager
 
         foreach (var dir in Directory.GetDirectories(_rootDir).OrderBy(d => d))
         {
-            AddBot(Path.GetFileName(dir), dir);
+            var name = Path.GetFileName(dir);
+
+            // A "."-tal kezdődő mappák (pl. .claude/) nem botok — ide kerülnek a minden bot
+            // között megosztott skill-ek és sub agent-ek (ld. GetBotDetails), amiket a claude.exe
+            // a munkakönyvtárból felfelé haladva magától felvesz (BUG-006).
+            if (name.StartsWith('.'))
+                continue;
+
+            AddBot(name, dir);
         }
     }
 
@@ -319,7 +329,10 @@ public class BotSessionManager
     /// <summary>A "Bot definíció" és "Képességek" tab tartalmát adja vissza: az agent.md nyers
     /// szövege (ha van), illetve a workspace .claude/skills és .claude/agents mappáinak
     /// tartalomjegyzéke — mindegyikhez a SKILL.md/agent .md YAML frontmatterjéből kiolvasott
-    /// rövid leírással, tooltiphez. Csak olvasás — a skill-ek/sub agent-ek karbantartása még
+    /// rövid leírással, tooltiphez. A `Bots/.claude/` közös mappa tartalma is bekerül,
+    /// `Shared = true` jelöléssel: a claude.exe a munkakönyvtárból felfelé haladva ezt is
+    /// felveszi minden botnál (élesben mérve), tehát ez nem csak megjelenítés kedvéért közös,
+    /// ténylegesen minden bot eléri. Csak olvasás — a skill-ek/sub agent-ek karbantartása még
     /// nincs megvalósítva a UI-n, ez egyelőre információs lista.</summary>
     public (string? agentDefinition, IReadOnlyList<CapabilityInfo> skills, IReadOnlyList<CapabilityInfo> subAgents) GetBotDetails(string id)
     {
@@ -330,32 +343,50 @@ public class BotSessionManager
         var agentPath = Path.Combine(bot.FolderPath, BotSession.AgentFileName);
         var agentDefinition = File.Exists(agentPath) ? File.ReadAllText(agentPath) : null;
 
-        var skillsDir = Path.Combine(bot.FolderPath, ".claude", "skills");
-        var skills = Directory.Exists(skillsDir)
-            ? Directory.GetDirectories(skillsDir)
-                .Select(dir =>
-                {
-                    var name = Path.GetFileName(dir);
-                    var description = ExtractFrontmatterDescription(Path.Combine(dir, "SKILL.md"));
-                    return new CapabilityInfo(name, description);
-                })
-                .Where(c => !string.IsNullOrEmpty(c.Name))
-                .OrderBy(c => c.Name)
-                .ToList()
-            : new List<CapabilityInfo>();
+        var sharedClaudeDir = Path.Combine(_rootDir, ".claude");
+        var botClaudeDir = Path.Combine(bot.FolderPath, ".claude");
 
-        var agentsDir = Path.Combine(bot.FolderPath, ".claude", "agents");
-        var subAgents = Directory.Exists(agentsDir)
-            ? Directory.GetFiles(agentsDir, "*.md")
-                .Select(file => new CapabilityInfo(
-                    Path.GetFileNameWithoutExtension(file),
-                    ExtractFrontmatterDescription(file)))
-                .Where(c => !string.IsNullOrEmpty(c.Name))
-                .OrderBy(c => c.Name)
-                .ToList()
-            : new List<CapabilityInfo>();
+        var skills = CollectSkills(Path.Combine(sharedClaudeDir, "skills"), shared: true)
+            .Concat(CollectSkills(Path.Combine(botClaudeDir, "skills"), shared: false))
+            .ToList();
+
+        var subAgents = CollectSubAgents(Path.Combine(sharedClaudeDir, "agents"), shared: true)
+            .Concat(CollectSubAgents(Path.Combine(botClaudeDir, "agents"), shared: false))
+            .ToList();
 
         return (agentDefinition, skills, subAgents);
+    }
+
+    private static List<CapabilityInfo> CollectSkills(string skillsDir, bool shared)
+    {
+        if (!Directory.Exists(skillsDir))
+            return new List<CapabilityInfo>();
+
+        return Directory.GetDirectories(skillsDir)
+            .Select(dir =>
+            {
+                var name = Path.GetFileName(dir);
+                var description = ExtractFrontmatterDescription(Path.Combine(dir, "SKILL.md"));
+                return new CapabilityInfo(name, description, shared);
+            })
+            .Where(c => !string.IsNullOrEmpty(c.Name))
+            .OrderBy(c => c.Name)
+            .ToList();
+    }
+
+    private static List<CapabilityInfo> CollectSubAgents(string agentsDir, bool shared)
+    {
+        if (!Directory.Exists(agentsDir))
+            return new List<CapabilityInfo>();
+
+        return Directory.GetFiles(agentsDir, "*.md")
+            .Select(file => new CapabilityInfo(
+                Path.GetFileNameWithoutExtension(file),
+                ExtractFrontmatterDescription(file),
+                shared))
+            .Where(c => !string.IsNullOrEmpty(c.Name))
+            .OrderBy(c => c.Name)
+            .ToList();
     }
 
     /// <summary>Kiolvassa egy Markdown fájl YAML frontmatterjéből a "description:" mező értékét

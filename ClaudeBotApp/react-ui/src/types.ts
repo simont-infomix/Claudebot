@@ -85,6 +85,8 @@ export interface BotSettingsDraft {
 export interface CapabilityInfo {
   name: string;
   description: string | null;
+  /** A Bots/.claude/ közös mappából származik-e — ilyenkor minden bot eléri, nem csak ez. */
+  shared: boolean;
 }
 
 export interface BotDetails {

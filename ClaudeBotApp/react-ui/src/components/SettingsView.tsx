@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
-import type { Bot, BotDetails, BotSettingsDraft, SettingsTab } from '../types';
+import type { Bot, BotDetails, BotSettingsDraft, CapabilityInfo, SettingsTab } from '../types';
 import { Select } from './Select';
 import { ConfirmDialog } from './ConfirmDialog';
 import './SettingsView.css';
@@ -76,6 +76,49 @@ const PERMISSION_MODE_OPTIONS = [
   { label: 'dontAsk', value: 'dontAsk' },
   { label: 'plan', value: 'plan' },
 ];
+
+/** Skill/sub agent chipek "Megosztott" (Bots/.claude/) és workspace-specifikus csoportokra
+ *  bontva — ugyanaz a subtitle+chips minta, mint az engedélyezett tool-oknál az MCP szerverek /
+ *  Natív tool-ok felosztás. A megosztottak ténylegesen minden botnál élnek: a claude.exe a
+ *  munkakönyvtárból felfelé haladva magától felveszi őket, nem csak a megjelenítés közös. */
+function CapabilityGroups({ items, emptyNote }: { items: CapabilityInfo[]; emptyNote: string }) {
+  if (items.length === 0) {
+    return <span className="settings-empty-note">{emptyNote}</span>;
+  }
+
+  const shared = items.filter((i) => i.shared);
+  const own = items.filter((i) => !i.shared);
+
+  function renderChips(list: CapabilityInfo[]) {
+    return (
+      <div className="settings-tools__chips">
+        {list.map((item) => (
+          <span key={item.name} className="tool-chip tool-chip--readonly" tabIndex={0}>
+            {item.name}
+            {item.description && <span className="info-icon__tooltip">{item.description}</span>}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {shared.length > 0 && (
+        <>
+          <span className="settings-tools__subtitle">Megosztott (minden bot eléri)</span>
+          {renderChips(shared)}
+        </>
+      )}
+      {own.length > 0 && (
+        <>
+          <span className="settings-tools__subtitle">Ebben a workspace-ben</span>
+          {renderChips(own)}
+        </>
+      )}
+    </>
+  );
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -438,26 +481,17 @@ export function SettingsView({
                 <span className="info-icon" tabIndex={0}>
                   ⓘ
                   <span className="info-icon__tooltip">
-                    A workspace .claude/agents/ mappájában található sub agent-definíciók listája.
-                    Ez csak megjelenítés — a sub agentek hozzáadása/szerkesztése nem a felületről
+                    A workspace .claude/agents/ mappájában, illetve a minden bot között közös
+                    Bots/.claude/agents/ mappában található sub agent-definíciók listája. Ez csak
+                    megjelenítés — a sub agentek hozzáadása/szerkesztése nem a felületről
                     történik.
                   </span>
                 </span>
               </div>
-              {details && details.subAgents.length > 0 ? (
-                <div className="settings-tools__chips">
-                  {details.subAgents.map((agent) => (
-                    <span key={agent.name} className="tool-chip tool-chip--readonly" tabIndex={0}>
-                      {agent.name}
-                      {agent.description && (
-                        <span className="info-icon__tooltip">{agent.description}</span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <span className="settings-empty-note">Nincs egyedi sub agent ebben a workspace-ben.</span>
-              )}
+              <CapabilityGroups
+                items={details?.subAgents ?? []}
+                emptyNote="Nincs egyedi sub agent ebben a workspace-ben."
+              />
             </div>
 
             <div className="settings-tools">
@@ -466,25 +500,16 @@ export function SettingsView({
                 <span className="info-icon" tabIndex={0}>
                   ⓘ
                   <span className="info-icon__tooltip">
-                    A workspace .claude/skills/ mappájában található skillek listája. Ez csak
-                    megjelenítés — a skillek hozzáadása/szerkesztése nem a felületről történik.
+                    A workspace .claude/skills/ mappájában, illetve a minden bot között közös
+                    Bots/.claude/skills/ mappában található skillek listája. Ez csak megjelenítés —
+                    a skillek hozzáadása/szerkesztése nem a felületről történik.
                   </span>
                 </span>
               </div>
-              {details && details.skills.length > 0 ? (
-                <div className="settings-tools__chips">
-                  {details.skills.map((skill) => (
-                    <span key={skill.name} className="tool-chip tool-chip--readonly" tabIndex={0}>
-                      {skill.name}
-                      {skill.description && (
-                        <span className="info-icon__tooltip">{skill.description}</span>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <span className="settings-empty-note">Nincs skill ebben a workspace-ben.</span>
-              )}
+              <CapabilityGroups
+                items={details?.skills ?? []}
+                emptyNote="Nincs skill ebben a workspace-ben."
+              />
             </div>
           </>
         )}
