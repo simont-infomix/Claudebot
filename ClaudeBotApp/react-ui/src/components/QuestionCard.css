@@ -88,6 +88,63 @@
   gap: var(--sp-2);
 }
 
+/* Multi-select kérdéseknél checkbox-lista, nem gombok — ettől egyértelmű, hogy több opció is
+   kiválasztható, nem csak az utoljára kattintott marad kijelölve (mint egy gomb-csoportnál). */
+.question-card__checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.question-card__checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background var(--duration-micro) var(--ease-spring), border-color var(--duration-micro) var(--ease-spring);
+}
+
+.question-card__checkbox-row:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.question-card__checkbox-row--selected {
+  background: linear-gradient(135deg, rgba(0, 232, 200, 0.12), rgba(75, 159, 255, 0.12));
+  border-color: rgba(0, 232, 200, 0.35);
+}
+
+.question-card__checkbox-row input[type='checkbox'] {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.question-card__checkbox-row input[type='checkbox']:disabled {
+  cursor: default;
+}
+
+.question-card__checkbox-row input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.question-card__checkbox-text {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.question-card__checkbox-description {
+  color: var(--text-secondary);
+}
+
 .question-card__option {
   min-height: 36px;
   padding: 0 var(--sp-3);

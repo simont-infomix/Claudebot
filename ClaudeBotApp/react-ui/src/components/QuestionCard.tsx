@@ -94,23 +94,52 @@ export function QuestionCard({ request, decision, onAnswer, onSkip }: Props) {
         <div key={q.question} className="question-card__question">
           {q.header && <span className="question-card__header-label">{q.header}</span>}
           <p className="question-card__text">{q.question}</p>
-          <div className="question-card__options">
-            {q.options.map((opt) => {
-              const isSelected = (selected[q.question] ?? []).includes(opt.label);
-              return (
-                <button
-                  key={opt.label}
-                  type="button"
-                  disabled={!pending}
-                  className={`question-card__option${isSelected ? ' question-card__option--selected' : ''}`}
-                  onClick={() => toggleOption(q.question, opt.label, q.multiSelect)}
-                  title={opt.description ?? undefined}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
+          {q.multiSelect ? (
+            // Checkbox-lista: egyértelműen jelzi, hogy itt — a sima gombokkal ellentétben —
+            // több opció is kiválasztható egyszerre.
+            <div className="question-card__checklist">
+              {q.options.map((opt) => {
+                const isSelected = (selected[q.question] ?? []).includes(opt.label);
+                return (
+                  <label
+                    key={opt.label}
+                    className={`question-card__checkbox-row${isSelected ? ' question-card__checkbox-row--selected' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={!pending}
+                      onChange={() => toggleOption(q.question, opt.label, true)}
+                    />
+                    <span className="question-card__checkbox-text">
+                      {opt.label}
+                      {opt.description && (
+                        <span className="question-card__checkbox-description"> — {opt.description}</span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="question-card__options">
+              {q.options.map((opt) => {
+                const isSelected = (selected[q.question] ?? []).includes(opt.label);
+                return (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    disabled={!pending}
+                    className={`question-card__option${isSelected ? ' question-card__option--selected' : ''}`}
+                    onClick={() => toggleOption(q.question, opt.label, false)}
+                    title={opt.description ?? undefined}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       ))}
 
