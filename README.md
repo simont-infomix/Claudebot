@@ -1,189 +1,117 @@
-# AI csapat
+# ClaudeBot
 
-AI ügynökcsapat, amely a development department manager napi munkáját tehermenesíti: feldolgozza a leveleket, a Teams üzeneteket és a naptárat, válaszokat készít elő, az új igényeket pedig jóváhagyás után kidolgoztatja — a requirementektől az előkészített Azure DevOps jegyekig —, majd a kész anyagot átadja a humán szoftverfejlesztőknek. A fejlesztést magát nem a csapat végzi.
+Windows tálca-alkalmazás, amely **több Claude Code botot futtat, ütemez és felügyel** egy helyen.
+Minden bot egy önálló `claude.exe` munkamenet a saját munkamappájában — headlessen, konzolablak
+nélkül —, az alkalmazáson belül pedig mindegyik saját chat-felületet, beállításokat és ütemezett
+feladatokat kap.
 
-> **Állapot:** tervezés, a megvalósítás még nem kezdődött el.
+> **Állapot:** v1.0.0 — első kiadás.
 
-## Alapelvek
+## Mit tud
 
-- **Ember a döntési pontokon:** levelet az ügynökök nem küldenek, csak piszkozatot írnak. Új igény csak jóváhagyás után indul.
-- **Egy ütemezett belépési pont:** csak az Asszisztens fut ütemezetten. Minden más igény szerint indul.
-- **Egy ügynök, egy felelősség:** szűk fókuszú szerepek.
-- **A wikibe csak a Librarian ír**, a többiek csak olvassák.
-- **Hordozhatóság:** minden egy git repóban van, telepítő szkripttel.
-- **Futtatási környezet:** a céges laptop. A felhős (self-hosted) változatot a hardverlehetőségek áttekintése után elvetettük.
+| Terület | Részletek |
+|---|---|
+| **Több bot egyszerre** | Botonként saját chat fájlcsatolással (drag & drop és vágólap), avatar, átnevezés, munkamappa. A bot bármikor leállítható, újraindítható, törölhető. |
+| **Ütemezett feladatok** | Botonként több feladat: időzítés, szüneteltetés, azonnali kézi futtatás, futás-előzmény. Az esedékességet pollozó időzítő figyeli, a számolt következő futással (ADR-0001). |
+| **Interaktív tool-jóváhagyás** | Ha a bot olyan eszközt használna, amire nincs előzetes engedélye, a csevegésben rákérdez — nem némán elutasításra kerül (ADR-0004). Kétszintű határidővel: ütemezett körnél rövidebb, mert ott tipikusan nincs a gép előtt senki. |
+| **A bot kérdései** | Az `AskUserQuestion` eszköz kérdései kártyaként jelennek meg a chatben, opciókkal, akár többszörös választással — a válasz visszajut a bothoz. |
+| **Bot-bot üzenetcsatorna** | Egy bot feladatot delegálhat annak a botnak, amelyik ért hozzá, és megkapja a válaszát — a felhasználónak nem kell üzeneteket másolgatnia a csevegések között. A forgalom mindkét fél chatjében látszik, botonként kikapcsolható (ADR-0005). |
+| **Megosztott képességek** | A közös `Bots/.claude/` mappa skilljeit és sub agentjeit minden bot eléri, botonkénti másolás nélkül. |
+| **Tálcaműködés** | Az ablak bezárása a tálcára rejt, az automatikus Windows-indítás kapcsolható (ADR-0003). Olvasatlan bot-üzenetnél a tálcaikon és a tálcagomb is jelez. |
+| **Bot-onkénti futási beállítások** | Model, effort, permission mode, engedélyezett tool-minták, interaktív jóváhagyás, csatorna-részvétel. |
 
-## A csapat
-
-| Ügynök | Hogyan fut | Feladat |
-|---|---|---|
-| **Asszisztens** | Ütemezetten, a Claude desktop app ütemezett feladataként | Olvassa a leveleket, a Teams üzeneteket és a naptárat. Válaszpiszkozatot ír a manager nevében az Outlookba. Információgyűjtéshez subagentként indíthatja a Librariant, a BA-t, az Architectet és a Scrum Mastert. Az új igényeket és feladatokat javaslatként (proposal) beküldi a jóváhagyó oldalra. |
-| **Project Manager (PM)** | API hívásra, a jóváhagyás után | Egy-egy új igény vagy feladat kidolgoztatásáért felel: összegyűjti a szükséges információkat, és a requirementeket, a tervet és az Azure DevOps jegyeket előkészítteti. A fejlesztést magát nem vezényli — a kész jegyeket a humán szoftverfejlesztőknek adja át. A Librariant, a BA-t, az Architectet és a Scrum Mastert subagentként indítja. Az Asszisztenst nem indíthatja. |
-| **Librarian** | Subagent | Projektenként egy Karpathy-féle LLM wiki tudástárat vezet. Elraktározza az információt, és kikeresi más ügynököknek. Műveletei: ingest, query, lint. |
-| **Business Analyst** | Subagent | Az üzleti igényből és az Architect megvalósíthatósági visszajelzéséből fejlesztési requirementek lesznek: user story, elfogadási kritériumok, PRD. Az Architecttel iteratívan dolgozik. |
-| **Architect** | Subagent | Már a requirementek előtt felméri a megvalósítási lehetőségeket, majd a BA-val iteratívan finomítva technológiai terveket készít elő (terv, ADR), és fejlesztői jegyekre bontja a munkát. |
-| **Scrum Master** | Subagent | Kezeli és karbantartja az Azure DevOps jegyeket: létrehozás, ütemezés, sprintbe sorolás, státusz. |
-
-**Technikai korlát:** egy subagent nem indíthat további subagentet, csak egy szintű a hierarchia. Ezért a PM nem lehet az Asszisztens subagentje. A PM önálló folyamatként indul, a jóváhagyó oldal API hívására.
-
-## Architektúra
+## Hogyan működik
 
 ```
- Claude desktop app
- ⏰ ütemezett feladat ──► [Asszisztens]
-                           │ Outlook / Teams / naptár: a desktop app csatlakozóival
-                           │ subagentek: Librarian · BA · Architect · Scrum Master
-                           │ válaszpiszkozat az Outlookba
-                           │
-                           │ POST http://127.0.0.1:4100/api/proposals
-                           ▼
- [Helyi jóváhagyó web app]  Node szerver + SQLite, csak localhoston
-    böngészőben: jóváhagy / átdolgoz / elvet
-                           │ jóváhagyáskor
-                           ▼
- [PM]  a szerver elindítja:  claude -p "<PM szerep + igény>"
-       a munkaterület mappájában
-       ├─► Librarian ──► wiki (git repó)
-       ├─► BA ⇄ Architect  (iteratív egyeztetés, lásd lent)
-       └─► Scrum Master ──► Azure DevOps (MCP)
-       │
-       └─ státusz, kérdések és eredmények vissza a web appba (API)
+┌─────────────────────── ClaudeBotApp.exe (egyetlen folyamat) ───────────────────────┐
+│                                                                                     │
+│   React UI  ──JS bridge──  WinForms host                                            │
+│  (WebView2)                 ├─ BotSessionManager ─┬─ BotSession ──► claude.exe #1   │
+│                             │                     └─ BotSession ──► claude.exe #2   │
+│                             ├─ BotTaskScheduler        stdin/stdout: stream-json     │
+│                             │                          + control-protokoll (jóváh.)  │
+│                             ├─ ChannelMcpServer ◄──── MCP tool-hívás HTTP-n ────┘   │
+│                             └─ BotMessageBus      (127.0.0.1, dinamikus port)        │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+          │                                              │
+          ▼                                              ▼
+   Bots/<botnév>/            ← a claude.exe munkakönyvtára: agent.md, .claude/, fájlok
+   Bots/.claude/             ← minden bot között megosztott skillek és sub agentek
 ```
 
-### BA és Architect: tyúk-tojás probléma
+A host a `claude.exe`-vel három csatornán beszél: **prompt** (stdin), **esemény-folyam** (stdout,
+`stream-json`), és a **control-protokoll** a jóváhagyási kérésekhez. A negyedik irány fordított: a
+bot hívja a hosztot — a bot-csatorna MCP szerverén keresztül, mert a CLI-ből a tool-hívás az
+egyetlen tiszta út a hoszt felé.
 
-A Business Analyst és az Architect nem egymás után, lineárisan dolgozik. A BA-nak a requirementek megírásához nem csak az üzleti igényt kell ismernie, hanem azt is, mi valósítható meg egyáltalán és milyen áron — ehhez az Architect inputja kell. Az Architectnek viszont a tervhez a BA által pontosított requirementek kellenek. Ezért az Architect jellemzően **korábban** száll be, mint a BA: először egy nagyvonalú megvalósíthatósági körképet ad, a BA ez alapján és az üzleti igény alapján megírja a requirementeket, az Architect ezekből tervet készít, és ha közben újabb kérdés vagy korlát merül fel, a kör megismétlődik.
+## Telepítés
 
-A PM feladata ezt az iterációt vezényelni: oda-vissza futtatja a BA-t és az Architectet, amíg a requirementek és a terv konzisztensek és megvalósíthatóak lesznek, és eldönti, mikor elég jó ez a konvergencia ahhoz, hogy a Scrum Master jegyeket készíthessen belőle.
+### Kész csomagból
 
-### Egy javaslat életútja
+A [Releases](../../releases) oldalról töltsd le a `ClaudeBot-<verzió>-win-x64.zip`-et, csomagold
+ki, és indítsd a `ClaudeBotApp.exe`-t. A csomag **self-contained**: .NET runtime telepítése nem
+szükséges.
 
-`proposed` → `approved` / `rejected` / `revision_requested` → `in_progress` → `waiting_for_input` → `done`
+Előfeltételek a gépen:
 
-- **Jóváhagyás:** a szerver elindítja a PM-et. Egyszerre egy PM fut, a többi jóváhagyott javaslat sorban vár.
-- **Átdolgozás:** a manager megjegyzést ír, és a javaslat visszakerül az Asszisztenshez.
-- **Elvetés:** a javaslat lezárul, az indoklás megmarad az előzmények között.
-- **Kérdés a PM-től:** a javaslat `waiting_for_input` állapotba kerül, és a manager az oldalon válaszol.
-- **Eredmény:** a requirementek, a terv és a létrehozott jegyek linkjei a javaslat lapján jelennek meg.
+1. **Claude Code CLI, natív telepítéssel** (`claude.exe`), bejelentkezve. Az alkalmazás induláskor
+   megkeresi — előbb a `CLAUDEBOT_CLI_PATH` környezeti változót (ha be van állítva, az dönt), majd
+   a `PATH` bejegyzéseit, végül a natív telepítő alapértelmezett helyét
+   (`%USERPROFILE%\.local\bin`). Ha nem találja, egy hibaüzenet után **el sem indul**. Az npm-es
+   telepítés (`claude.cmd`) nem elég: a headless indítás natív `claude.exe`-t igényel.
+2. **WebView2 Runtime** — Windows 10/11-en jellemzően előre telepítve.
 
-### Egy javaslat adatai
+### Költözés másik gépre
 
-Cím, projekt, forrás (link a levélre vagy Teams üzenetre), összefoglaló, javasolt hatókör, prioritás, állapot, megjegyzések, előzmények.
+Az alkalmazás mappája önhordó. A botok átviteléhez másold át a `Bots/` mappát is: a munkamappák,
+az `agent.md`-k, a beállítások és az ütemezett feladatok hordozhatók, a beszélgetés-előzmény nem
+(az a `claude.exe` session-jében él). A botok engedélylistájában hivatkozott globális MCP-szervereket
+(pl. Azure DevOps) a célgépen is be kell állítani.
 
-## Tudástár (Karpathy-féle LLM wiki)
+## Fejlesztés
 
-Projektenként egy wiki, **saját, önálló git repóban**:
+Szükséges: **.NET 10 SDK**, **Node.js** (npm), és a Claude Code CLI a futtatáshoz.
 
+```powershell
+# Debug build (framework-dependent, gyors)
+dotnet build ClaudeBotApp/ClaudeBotApp.csproj
+
+# Release build (self-contained, win-x64 — ez a kiadható csomag)
+dotnet build ClaudeBotApp/ClaudeBotApp.csproj -c Release
 ```
-wiki/<projekt>/   ← önálló git repó
-  raw/        ← nyers források (levelek, jegyzetek, dokumentumok)
-  pages/      ← a Librarian által karbantartott oldalak (entitások, döntések, fogalmak)
-  index.md    ← tartalomjegyzék
-  log.md      ← időrendi napló a változásokról
-```
 
-Mivel minden wiki saját git repó a fő `ai-team` repón belül, ez **"git a git-ben"** felállást eredményez: a gyökér `.gitignore` kizárja a `wiki/` mappa tartalmát a fő repó verziókövetéséből, így a beágyazott wiki-repók teljesen függetlenül élnek, és a fő repó nem próbálja kezelni őket.
+A React UI buildje a csproj targetjéből automatikusan lefut (`npm install` az első alkalommal,
+majd `npm run build`), és a kimenet a `webui/` mappába kerül az exe mellé. Külön is futtatható a
+`ClaudeBotApp/react-ui/` könyvtárból.
 
-- **ingest:** új anyag feldolgozása, a kapcsolódó oldalak frissítése.
-- **query:** válasz más ügynökök kérdéseire a wiki alapján.
-- **lint:** ellentmondások, elavult és árva oldalak keresése, rendszeresen.
-- Mivel a Librariant az Asszisztens és a PM is indíthatja, írás előtt zárol (lock fájl), és minden változtatást a projekt saját wiki-repójába commitol.
+> ⚠️ A `ClaudeBotApp/clean-rebuild.ps1` **törli a teljes `bin` mappát**, amiben a botok
+> munkamappái (`Bots/`) is élnek. Csak akkor futtasd, ha előbb kimentetted őket.
+
+Hibakereséshez minden bot munkamappájában készül egy `claudebot-stream.log`, benne a `claude.exe`
+felé és felől menő összes nyers JSON-sor.
 
 ## Repó szerkezete
 
 ```
-ai-team/                  ← egyetlen git repó (később Azure DevOps Repos)
-  approval-app/           ← Node szerver, SQLite, webes felület, PM-indító
-  workspace/
-    CLAUDE.md             ← közös csapatszabályok
-    .claude/agents/       ← librarian.md, analyst.md, architect.md, scrum-master.md
-    roles/                ← assistant.md, pm.md
-    .mcp.json             ← Azure DevOps MCP csatlakozó
-  wiki/<projekt>/         ← projektenként ÖNÁLLÓ git repó, a .gitignore kizárja a fő repóból
-  .gitignore              ← kizárja a wiki/ tartalmát (git a git-ben felállás)
-  setup.ps1               ← telepítés új gépen
-  .env.example            ← minta a titkokhoz (a valódi .env nincs a gitben)
-  Dockerfile, docker-compose.yml   ← opcionális, egy későbbi szerverre költözéshez
+ClaudeBotApp/            # A WinForms host (C#, .NET 10)
+  react-ui/              # A felhasználói felület (React + TypeScript, Vite)
+  BotTemplate/           # Sablon-skillek bot workspace-hez — kézi másolásra; a kód jelenleg
+                         #   nem használja (új bot üres munkamappával jön létre)
+docs/                    # A formális dokumentumkészlet (lásd lent)
+specification.md         # Az eredeti, informális vázlat — történeti, nem karbantartott
 ```
 
-## Telepítés / költözés másik gépre
+## Dokumentáció
 
-**Előfeltétel:** Node (a mostani gépen v24), git, Claude Code CLI és a Claude desktop app, bejelentkezve.
+A `docs/` mappa a projekt formális dokumentumkészlete, a `docs/Index.md` a tartalomjegyzéke:
 
-1. `git clone <repó>`
-2. A `.env` átvitele biztonságos úton (Azure DevOps token, helyi API token).
-3. A `setup.ps1` futtatása: `npm install`, az adatbázis létrehozása, a web szerver felvétele a Windows indításkor futó feladatai közé.
-4. Az Asszisztens ütemezett feladatának létrehozása a desktop appban, a `roles/assistant.md` alapján.
-5. A jóváhagyó oldal adatbázisa (SQLite) egyetlen fájl, mentésből visszamásolható.
+- **Use case-ek** (`docs/use-cases/`) — mit ér el a felhasználó, lépésről lépésre;
+- **Döntések** (`docs/adr/`, összesítve: `docs/Decision_list.md`) — a jelentős technikai döntések
+  indoklása és az elvetett alternatívák;
+- **Architektúra** (`docs/architecture-c1.md`, `architecture-c2/`, `architecture-c3/`) — C4-modell
+  szerinti diagramok;
+- **UI design szabályzat** (`docs/ui-design-guideline.md`);
+- **Hibák** (`docs/bugs/`) — a feltárt hibák leírása és a javításuk kontextusa.
 
-**Docker és WSL:** nem ezekre építünk. Az Asszisztens mindenképp a gazdagépen fut a desktop app csatlakozói miatt. A céges gépen mindkettőhöz rendszergazdai jog kell, a Docker Desktophoz pedig nagyobb cégnél licenc is. A Docker fájlok csak tartalékként kerülnek a repóba.
-
-## Üzemeltetési szempontok
-
-- A laptopnak ébren kell lennie és a desktop appnak nyitva. Az ébren tartás (keep-awake) bekapcsolható. Hogy egy alvás miatt kimaradt futás pótlódik-e, azt tesztelni kell.
-- A web szerver csak a `127.0.0.1` címen figyel. Az Asszisztens egy helyi tokennel hívja.
-- Minden ügynökfutást naplózni kell: mit csinált, milyen eszközöket hívott, mennyibe került.
-- Egyeztetni kell az IT-val, hogy a helyi szerver futtatása és a céges levelezés feldolgozása Claude-dal belefér-e a szabályzatba.
-
-## Bevezetési sorrend
-
-1. Repó váz, `CLAUDE.md`, szerepleírások.
-2. Jóváhagyó web app (API és felület).
-3. Asszisztens és Librarian, tesztelés valódi leveleken.
-4. PM a BA-val és az Architecttel.
-5. Scrum Master és az Azure DevOps bekötése.
-6. Telepítő szkript, költözési próba.
-
-## ClaudeBot — önálló termék ugyanebben a repóban
-
-> **Állapot:** POC / aktív fejlesztés.
-
-A `ClaudeBot/` mappában egy **önálló, különálló alkalmazás** lakik: egy Windows asztali tálca-app,
-amely egy vagy több `claude.exe` (Claude Code CLI) subprocesst futtat headlessen (nincs
-konzolablak), mindegyiket egy saját munkaterület-mappához kötve, és mindegyikhez saját,
-egyedi chat-felületet ad az alkalmazáson belül. Az ötlet a fenti Asszisztens-koncepcióból
-(levél/Teams-triázs, draft-only, ember a döntési pontokon) indult ki, de **nem annak kiterjesztése**
-— saját kódbázis, saját futtatási infrastruktúra, ugyanebben a git repóban.
-
-**Architektúra (4 container):**
-
-| Komponens | Technológia | Felelősség |
-|---|---|---|
-| WinForms Host | .NET 10, C# WinForms | Egyetlen folyamat: a WebView2-t hosztolja, indítja/felügyeli a bot-session-öket (subprocesseket). |
-| React UI | React, WebView2-n megjelenítve | A teljes felület: bot-választó sáv (Sidebar), chat-nézet fájlcsatolással, beállítások (SettingsView), bot-kontextusmenü. Egy JS bridge-en (`WebViewBridge`) keresztül kommunikál a hosttal. |
-| Bot workspace | Helyi fájlrendszer | Botonként egy almappa — ez a `claude.exe` munkakönyvtára, benne a skill-ek/agent-configok (`BotTemplate/`). |
-| Claude Code CLI session | `claude.exe`, headless, `stream-json` | Botonként egy önálló, hosszú életű subprocess, ami a tényleges agent-logikát futtatja; stdin/stdout JSON-sorokon kommunikál a hosttal. |
-
-**Jelenlegi funkciók (POC):**
-- Több bot egyidejű indítása és felügyelete (multi-bot host)
-- Chat-felület botonként, fájlcsatolással (drag&drop + vágólap)
-- Bot-kontextusmenü (jobbklikk): terminál-munkamenet megnyitása, munkamappa megnyitása Intézőben
-- Beállítások nézet (SettingsView)
-- Bot-sablon (`BotTemplate/`) a munkaterület alapértelmezett `.claude/skills` tartalmához
-
-**Telepítés / költözés másik gépre:**
-
-A Release build **self-contained**: a .NET futtatókörnyezet (beleértve az ASP.NET Core részt, amit
-a bot-csatorna Kestrelje igényel) a kimeneti mappában van, így a célgépre semmilyen .NET runtime-ot
-nem kell telepíteni. A `dotnet build -c Release` kimenete (`ClaudeBotApp/bin/Release/net10.0-windows/`)
-önmagában átmásolható.
-
-Amire a célgépen szükség van:
-
-1. **Claude Code CLI, natív telepítéssel** (`claude.exe`) — bejelentkezve. Az alkalmazás induláskor
-   megkeresi: előbb a `CLAUDEBOT_CLI_PATH` környezeti változót (ha be van állítva, az dönt), majd a
-   `PATH` bejegyzéseit, végül a natív telepítő alapértelmezett helyét (`%USERPROFILE%\.local\bin`).
-   Ha nincs meg, egy hibaüzenet után **el sem indul** — így nem botonkénti, érthetetlen hibaként
-   jelentkezik a hiány. Az npm-es telepítés (`claude.cmd`) **nem elég**: a headless indítás natív
-   `claude.exe`-t igényel, de a hibaüzenet külön jelzi, ha ilyet talált a gépen.
-2. **WebView2 Runtime** (Windows 10/11-en jellemzően előre telepítve).
-3. A **`Bots/` mappa** átmásolása a kimeneti mappába, ha a meglévő botokat (beszélgetés-előzmény
-   nélkül: munkamappa, `agent.md`, beállítások, ütemezett feladatok) vinni szeretnéd.
-4. A botok engedélylistájában hivatkozott **globális MCP-szerverek** (pl. Azure DevOps) beállítása a
-   célgépen.
-
-**Dokumentáció:** a részletes terv és a formális specifikációs dokumentumok a `ClaudeBot/` mappában
-élnek, külön a fenti tudástár-rendszertől:
-- `ClaudeBot/specification.md` — az eredeti, informális terv (v1 hatókör, architektúra, elvetett alternatívák)
-- `ClaudeBot/docs/Index.md` — a formális dokumentumkészlet tartalomjegyzéke: use case-ek (UC-001–004),
-  C1/C2/C3 architektúra-diagramok, UI design szabályzat
+A dokumentumok karbantartásának szabályait (frontmatter, elnevezés, mikor kell új use case vagy
+ADR) a `docs/CLAUDE.md` rögzíti.
