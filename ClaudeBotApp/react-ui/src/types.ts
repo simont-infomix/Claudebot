@@ -60,6 +60,9 @@ export interface Bot {
   permissionMode: string;
   /** Kérdezzen-e a bot futásidőben engedélyt a nem engedélyezett eszközökre (UC-018). */
   interactiveApproval: boolean;
+  /** Részt vesz-e a bot a közös bot-csatornán: kaphat-e üzenetet a többi bottól és küldhet-e
+   *  nekik (UC-021). */
+  channelEnabled: boolean;
   scheduledTasks: ScheduledTask[];
   /** Van-e olyan bot-válasz vagy hiba, amit a felhasználó még nem látott (UC-017). Csak
    *  jelzés, nem számláló. */
@@ -80,6 +83,7 @@ export interface BotSettingsDraft {
   effort: string | null;
   permissionMode: string;
   interactiveApproval: boolean;
+  channelEnabled: boolean;
 }
 
 export interface CapabilityInfo {
@@ -95,7 +99,16 @@ export interface BotDetails {
   subAgents: CapabilityInfo[];
 }
 
-export type LogKind = 'assistant' | 'info' | 'error' | 'user' | 'thinking' | 'permission';
+export type LogKind =
+  | 'assistant'
+  | 'info'
+  | 'error'
+  | 'user'
+  | 'thinking'
+  | 'permission'
+  /** Bot-bot csatorna forgalma (UC-021): kimenő üzenet vagy egy másik bottól érkezett üzenet.
+   *  Sem nem a felhasználó üzenete, sem nem a bot neki szóló válasza — megfigyelt forgalom. */
+  | 'channel';
 
 export interface LogLine {
   kind: LogKind;

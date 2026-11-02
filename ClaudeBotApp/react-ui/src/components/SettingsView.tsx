@@ -137,6 +137,7 @@ function draftFromBot(bot: Bot): BotSettingsDraft {
     effort: bot.effort,
     permissionMode: bot.permissionMode,
     interactiveApproval: bot.interactiveApproval,
+    channelEnabled: bot.channelEnabled,
   };
 }
 
@@ -147,6 +148,7 @@ function draftsEqual(a: BotSettingsDraft, b: BotSettingsDraft): boolean {
     a.effort === b.effort &&
     a.permissionMode === b.permissionMode &&
     a.interactiveApproval === b.interactiveApproval &&
+    a.channelEnabled === b.channelEnabled &&
     a.allowedTools.length === b.allowedTools.length &&
     a.allowedTools.every((t, i) => t === b.allowedTools[i])
   );
@@ -439,6 +441,27 @@ export function SettingsView({
 
               <span className="settings-tools__subtitle">MCP szerverek</span>
               <div className="settings-tools__chips">
+                {/* A bot-csatorna (UC-021) a hoszt saját MCP szervere. A többi chiptől eltérően
+                    NEM az allowedTools listát kapcsolja: a részvételt a busz érvényesíti
+                    futásidőben, ezért a ki/bekapcsolás nem indítja újra a botot. A felhasználó
+                    felé viszont ugyanaz a kérdés ("használhatja-e ezt a bot"), ezért itt, a többi
+                    MCP szerver között a helye. */}
+                <button
+                  type="button"
+                  className={`tool-chip${
+                    draft.channelEnabled ? ' tool-chip--enabled' : ' tool-chip--disabled'
+                  }`}
+                  onClick={() => updateDraft({ channelEnabled: !draft.channelEnabled })}
+                >
+                  Bot-csatorna
+                  <span className="tool-chip__icon">{draft.channelEnabled ? '×' : '+'}</span>
+                  <span className="info-icon__tooltip">
+                    A többi bottal való üzenetváltás (list_bots, send_message, recent_messages):
+                    a bot feladatot delegálhat nekik és válaszolhat a kérdéseikre. A forgalom
+                    mindkét fél csevegésében látszik. Kikapcsolva se nem küld, se nem kap
+                    üzenetet — a bot újraindítása nélkül.
+                  </span>
+                </button>
                 {mcpToolChips.map((t) => {
                   const isEnabled = draft.allowedTools.includes(t.pattern);
                   return (

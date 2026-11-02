@@ -225,6 +225,10 @@ public class WebViewBridge
                         var interactiveApproval = !root.TryGetProperty("interactiveApproval", out var approvalProp)
                             || approvalProp.ValueKind != JsonValueKind.False;
 
+                        // Ugyanaz a minta: hiányzó mező mellett a bot a csatornán marad.
+                        var channelEnabled = !root.TryGetProperty("channelEnabled", out var channelProp)
+                            || channelProp.ValueKind != JsonValueKind.False;
+
                         var scheduledTasks = new List<ScheduledTask>();
                         if (root.TryGetProperty("scheduledTasks", out var tasksProp) &&
                             tasksProp.ValueKind == JsonValueKind.Array)
@@ -238,7 +242,7 @@ public class WebViewBridge
                         var botId = settingsBotIdProp.GetString() ?? "";
                         var (success, error, newId) = _manager.ApplySettings(
                             botId, settingsNameProp.GetString() ?? "", tools, model, effort, permissionMode,
-                            interactiveApproval, scheduledTasks);
+                            interactiveApproval, channelEnabled, scheduledTasks);
 
                         if (!success)
                         {
@@ -422,6 +426,7 @@ public class WebViewBridge
             effort = b.Effort,
             permissionMode = b.PermissionMode,
             interactiveApproval = b.InteractiveApproval,
+            channelEnabled = b.ChannelEnabled,
             scheduledTasks = b.ScheduledTasks.Select(ToTaskPayload),
             hasUnreadMessage = b.HasUnreadMessage,
             pendingApprovalCount = b.PendingPermissions.Count,
@@ -472,7 +477,9 @@ public class WebViewBridge
     {
         // Csak a végleges bot-válasz és a hiba számít "üzenetnek" (UC-017) — a köztes
         // gondolkodás/eszközhívás (Thinking) és a saját, visszaidézett User-sor nem generál
-        // jelzést. FIGYELEM: ez a metódus a bot-folyamat kimenetét olvasó háttérszálon fut.
+        // jelzést. A bot-bot forgalom (Channel) sem: az nem a felhasználónak szól, és a neki
+        // szánt összegzés úgyis Assistant-sorként érkezik meg (UC-021).
+        // FIGYELEM: ez a metódus a bot-folyamat kimenetét olvasó háttérszálon fut.
         if (line.Kind is LogKind.Assistant or LogKind.Error or LogKind.Permission)
         {
             // A jóváhagyási kérés akkor is figyelmet igényel, ha a felhasználó épp ezt a botot
@@ -610,6 +617,7 @@ public class WebViewBridge
         LogKind.User => "user",
         LogKind.Thinking => "thinking",
         LogKind.Permission => "permission",
+        LogKind.Channel => "channel",
         _ => "assistant",
     };
 

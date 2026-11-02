@@ -23,8 +23,16 @@
     <EmbeddedResource Include="NeonRobot.ico" />
   </ItemGroup>
 
+  <!-- A bot-csatorna MCP szervere (ADR-0005) a hoszt folyamatán belül, Kestrelen fut. A
+       FrameworkReference adja a Kestrelt/minimal API-t; a http.sys-re épülő HttpListener
+       szándékosan nem jött szóba, mert az URL-ACL foglalást igényelhet. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
   </ItemGroup>
 
   <!-- A react-ui/ a .NET SDK implicit fájl-globbingjától független, saját (npm-mel kezelt) forrásfa —

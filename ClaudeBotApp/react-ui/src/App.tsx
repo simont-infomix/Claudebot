@@ -224,6 +224,7 @@ export default function App() {
         effort: selectedBot.effort,
         permissionMode: selectedBot.permissionMode,
         interactiveApproval: selectedBot.interactiveApproval,
+        channelEnabled: selectedBot.channelEnabled,
       },
       scheduledTasks,
     );

@@ -2,11 +2,12 @@
 id: architecture-c2-claude-bot
 title: Architektúra diagram — C2 (Container) – ClaudeBot
 type: architecture-c2
-version: 0.1.0
+version: 0.2.0
 created: 2026-10-15
-updated: 2026-10-15
+updated: 2026-11-02
 references:
   - architecture-c1
+  - decision-05
 ---
 
 ## Leírás
@@ -17,6 +18,10 @@ fájlrendszer-alapú tároló botonként, és a ténylegesen futtatott AI-ügyn�
 CLI, headless módban). A natív host és a webes UI egy JavaScript-híd (bridge) üzeneteivel
 kommunikál egymással; nincs külön szerver-container, a rendszer teljes egészében a felhasználó
 gépén fut.
+
+A bot-session-ök egymással is tudnak üzenni: a natív host egy közös üzenet-csatornát ajánl ki
+feléjük (ADR-0005), amin egy bot feladatot delegálhat egy másiknak. Ez nem új container — a
+csatorna a natív hoszton belül él, és a session-ök a már meglévő kapcsolatukon érik el.
 
 ## Diagram
 
@@ -38,8 +43,8 @@ C4Container
     Rel(user, reactUi, "Használja")
     Rel(reactUi, winformsHost, "JS bridge: postMessage (pl. új bot létrehozása, terminál nyitása)")
     Rel(winformsHost, reactUi, "JS bridge: PostWebMessageAsJson (bot-lista, élő log-események)")
-    Rel(winformsHost, claudeSession, "Indítja/felügyeli; stdin JSON-sorok (prompt), időzített küldés")
-    Rel(claudeSession, winformsHost, "stdout JSON-sorok (assistant válasz)")
+    Rel(winformsHost, claudeSession, "Indítja/felügyeli; stdin JSON-sorok (prompt), időzített küldés, bot-bot üzenetek kézbesítése")
+    Rel(claudeSession, winformsHost, "stdout JSON-sorok (assistant válasz); MCP tool-hívások a bot-csatornához (ADR-0005)")
     Rel(winformsHost, botWorkspace, "Mappa létrehozása új bot felvételekor")
     Rel(claudeSession, botWorkspace, "Munkakönyvtár: skill-ek/agent-configok olvasása, fájlműveletek")
     Rel(claudeSession, anthropicApi, "API-hívások")

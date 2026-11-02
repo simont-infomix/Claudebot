@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -23,6 +24,17 @@ public class BotSessionManager
     private readonly string _rootDir;
     private readonly List<BotSession> _bots = new();
 
+    /// <summary>A bot-csatorna MCP szerverének gyökér-címe (ADR-0005), vagy null, ha a szerver nem
+    /// indult el — ilyenkor a botok csatorna-tool-ok nélkül futnak.</summary>
+    private readonly string? _channelBaseUrl;
+
+    /// <summary>Csatorna-token → bot. A token adja a bot kilétét az MCP-híváskor, ezért
+    /// kitalálhatatlannak kell lennie, és csak memóriában él (lemezre sosem kerül). A kulcs
+    /// szándékosan a token, nem a bot neve: így az átnevezés magától helyes marad.
+    /// Konkurens gyűjtemény, mert a feloldás a Kestrel kérés-szálairól jön, a bővítés/törlés
+    /// viszont a UI-szálról.</summary>
+    private readonly ConcurrentDictionary<string, BotSession> _channelTokens = new();
+
     public event Action? BotListChanged;
     public event Action<BotSession, LogLine>? LogReceived;
     public event Action<BotSession, BotStatus>? BotStatusChanged;
@@ -39,10 +51,16 @@ public class BotSessionManager
 
     public IReadOnlyList<BotSession> Bots => _bots;
 
-    public BotSessionManager(string rootDir)
+    public BotSessionManager(string rootDir, string? channelBaseUrl = null)
     {
         _rootDir = rootDir;
+        _channelBaseUrl = channelBaseUrl;
     }
+
+    /// <summary>A csatorna-token feloldása bot-session-re (ADR-0005) — ezt hívja a
+    /// <see cref="ChannelMcpServer"/> middleware-e minden bejövő MCP-kérésnél.</summary>
+    public BotSession? ResolveByChannelToken(string token) =>
+        _channelTokens.TryGetValue(token, out var bot) ? bot : null;
 
     public void LoadExisting()
     {
@@ -119,6 +137,12 @@ public class BotSessionManager
         }
 
         _bots.Remove(bot);
+
+        // A csatorna-token nélkül a törölt bot végpontja azonnal érvénytelenné válik — egy még
+        // futó gyermekfolyamat se tudjon a nevében üzenni.
+        foreach (var token in _channelTokens.Where(kvp => kvp.Value == bot).Select(kvp => kvp.Key).ToList())
+            _channelTokens.TryRemove(token, out _);
+
         BotListChanged?.Invoke();
         return (true, null);
     }
@@ -275,7 +299,7 @@ public class BotSessionManager
     public (bool success, string? error, string? newId) ApplySettings(
         string id, string newName, IReadOnlyList<string> allowedTools,
         string? model, string? effort, string? permissionMode, bool interactiveApproval,
-        IReadOnlyList<ScheduledTask> scheduledTasks)
+        bool channelEnabled, IReadOnlyList<ScheduledTask> scheduledTasks)
     {
         var bot = FindBot(id);
         if (bot == null)
@@ -313,8 +337,9 @@ public class BotSessionManager
             : permissionMode.Trim();
 
         // A claude.exe ezeket csak induláskor olvassa, ezért változásuk újraindítást igényel —
-        // a feladatlista viszont nem, azt a scheduler futásidőben használja. Enélkül egy feladat
-        // szüneteltetése is eldobná a bot beszélgetés-kontextusát.
+        // a feladatlista és a csatorna-részvétel viszont nem: azokat a scheduler, illetve a
+        // BotMessageBus futásidőben használja. Enélkül egy feladat szüneteltetése vagy a csatorna
+        // kikapcsolása is eldobná a bot beszélgetés-kontextusát.
         var needsRestart =
             newId != null ||
             bot.Model != newModel ||
@@ -329,6 +354,7 @@ public class BotSessionManager
         bot.Effort = newEffort;
         bot.PermissionMode = newPermissionMode;
         bot.InteractiveApproval = interactiveApproval;
+        bot.ChannelEnabled = channelEnabled;
         bot.ScheduledTasks = MergeScheduledTasks(bot.ScheduledTasks, scheduledTasks);
 
         SaveMeta(bot);
@@ -575,6 +601,10 @@ public class BotSessionManager
             {
                 bot.InteractiveApproval = meta.InteractiveApproval.Value;
             }
+            if (meta?.ChannelEnabled != null)
+            {
+                bot.ChannelEnabled = meta.ChannelEnabled.Value;
+            }
             if (meta?.ScheduledTasks != null)
             {
                 bot.ScheduledTasks = meta.ScheduledTasks;
@@ -602,6 +632,7 @@ public class BotSessionManager
             Effort = bot.Effort,
             PermissionMode = bot.PermissionMode,
             InteractiveApproval = bot.InteractiveApproval,
+            ChannelEnabled = bot.ChannelEnabled,
             ScheduledTasks = bot.ScheduledTasks,
         };
         File.WriteAllText(GetMetaPath(bot), JsonSerializer.Serialize(meta, MetaJsonOptions));
@@ -618,6 +649,10 @@ public class BotSessionManager
         /// <summary>Nullable, hogy a funkció bevezetése előtt mentett meta-fájlokban a hiánya
         /// megkülönböztethető legyen a szándékos kikapcsolástól — ilyenkor az alapértelmezés él.</summary>
         public bool? InteractiveApproval { get; set; }
+
+        /// <summary>Részvétel a közös bot-csatornán (UC-021). Nullable, ld. az
+        /// <see cref="InteractiveApproval"/> indoklását.</summary>
+        public bool? ChannelEnabled { get; set; }
 
         public List<ScheduledTask>? ScheduledTasks { get; set; }
     }
@@ -671,6 +706,15 @@ public class BotSessionManager
         bot.PermissionResolved += request => PermissionResolved?.Invoke(bot, request);
         LoadMeta(bot);
         _bots.Add(bot);
+
+        // A csatorna-végpontnak az indítás ELŐTT kell megvolnia: a claude.exe a --mcp-config-ot
+        // csak induláskor olvassa (ld. BotSession.Start).
+        if (_channelBaseUrl != null)
+        {
+            var token = Guid.NewGuid().ToString("N");
+            _channelTokens[token] = bot;
+            bot.ChannelMcpUrl = $"{_channelBaseUrl}/mcp/{token}";
+        }
 
         bot.Start();
         BotListChanged?.Invoke();

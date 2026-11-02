@@ -9,6 +9,8 @@ public partial class Form1 : Form
     private BotSessionManager? _manager;
     private WebViewBridge? _bridge;
     private BotTaskScheduler? _scheduler;
+    private ChannelMcpServer? _channelServer;
+    private BotMessageBus? _messageBus;
 
     /// <summary>A felhasználó a tálcaikon "Bezárás" menüpontjával tényleges kilépést kért — az
     /// ablak X gombja ettől megkülönböztetendő, mert az csak a tálcára rejt (ADR-0003).</summary>
@@ -164,7 +166,16 @@ public partial class Form1 : Form
         webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
             "claudebot.local", _webUiDir, CoreWebView2HostResourceAccessKind.Allow);
 
-        _manager = new BotSessionManager(_botsRootDir);
+        // A sorrend kötött (ADR-0005): a csatorna-szervernek a botok indítása (LoadExisting) előtt
+        // kell élnie, mert a claude.exe a végpont címét csak induláskor kapja meg. A busz viszont
+        // csak a menedzser után jöhet létre — ezért kerül bele a szerverbe utólag, az Attach-csal.
+        _channelServer = new ChannelMcpServer();
+        await _channelServer.StartAsync();
+
+        _manager = new BotSessionManager(_botsRootDir, _channelServer.BaseUrl);
+        _messageBus = new BotMessageBus(_manager);
+        _channelServer.Attach(_manager, _messageBus);
+
         _scheduler = new BotTaskScheduler(_manager);
         _bridge = new WebViewBridge(webView, _manager, _scheduler);
         _bridge.ExitConfirmResponse += OnExitConfirmResponse;
@@ -283,6 +294,7 @@ public partial class Form1 : Form
 
         _scheduler?.Stop();
         _manager?.StopAll();
+        _channelServer?.Stop();
         trayIcon.Visible = false;
     }
 }

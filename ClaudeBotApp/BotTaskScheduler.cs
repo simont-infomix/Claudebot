@@ -134,7 +134,7 @@ public class BotTaskScheduler
     /// ugyanazt a kört újra elindítaná, mert az esedékesség még mindig a múltban lenne.</summary>
     private bool Dispatch(BotSession bot, ScheduledTask task, DateTime now, bool advanceSchedule)
     {
-        var uuid = bot.SendPrompt(task.Prompt, null, task.Name);
+        var uuid = bot.SendPrompt(task.Prompt, null, PromptOrigin.Scheduled, task.Name);
         if (uuid == null)
             return false;
 

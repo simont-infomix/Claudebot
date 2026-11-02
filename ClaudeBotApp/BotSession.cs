@@ -23,6 +23,25 @@ public enum LogKind
     /// csak tartalék megjelenítés: az élő állapotot (gombok, döntés) a felület a
     /// <see cref="LogLine.RequestId"/> alapján, külön nyilvántartásból veszi.</summary>
     Permission,
+
+    /// <summary>Bot-bot csatorna forgalma (UC-021): kimenő üzenet a csatornára, vagy egy másik
+    /// bottól érkezett üzenet. Saját sortípus, mert sem nem a felhasználó üzenete (User), sem nem
+    /// a bot válasza (Assistant) — a felhasználó számára ez megfigyelt, nem neki szóló forgalom.</summary>
+    Channel,
+}
+
+/// <summary>Mi váltotta ki a kört. Ez dönti el, hogyan jelenik meg a prompt a csevegésben, és hogy
+/// a kör a rövidebb (ütemezett) jóváhagyási határidő alá esik-e.</summary>
+public enum PromptOrigin
+{
+    /// <summary>A felhasználó írta a chatben (UC-002).</summary>
+    Manual,
+
+    /// <summary>Ütemezett feladat köre (UC-013).</summary>
+    Scheduled,
+
+    /// <summary>Egy másik bot üzenete a közös csatornáról (UC-021).</summary>
+    Channel,
 }
 
 /// <summary>A <paramref name="RequestId"/> csak <see cref="LogKind.Permission"/> sornál van
@@ -35,6 +54,11 @@ public class BotSession
     public const string AgentFileName = "agent.md";
     public const string DebugLogFileName = "claudebot-stream.log";
     public const string DefaultPermissionMode = "acceptEdits";
+
+    /// <summary>A bot-csatorna MCP szerverének neve a CLI felé. A bot oldalán ebből lesz a
+    /// tool-ok előtagja (`mcp__claudebots__send_message`), ezért a <see cref="BotMessageBus"/>
+    /// szövegei is erre hivatkoznak.</summary>
+    public const string ChannelMcpServerName = "claudebots";
 
     /// <summary>Ennyit vár egy ütemezett feladat köréből érkező jóváhagyási kérés, mielőtt
     /// automatikusan elutasításra kerül — ilyenkor jellemzően nincs a gép előtt senki.</summary>
@@ -60,6 +84,18 @@ public class BotSession
     /// <summary>Kérdezzen-e a bot futásidőben engedélyt a nem engedélyezett eszközökre (UC-018).
     /// Kikapcsolva a korábbi viselkedés él: az ilyen hívások némán elutasításra kerülnek.</summary>
     public bool InteractiveApproval { get; set; } = true;
+
+    /// <summary>Részt vesz-e a bot a közös bot-csatornán (UC-021): kaphat-e üzenetet a többiektől,
+    /// és küldhet-e nekik. A tool-ok ilyenkor is ott vannak a session-ben — a tiltást a
+    /// <see cref="BotMessageBus"/> érvényesíti futásidőben, épp azért, hogy a kapcsoló átbillentése
+    /// NE igényeljen újraindítást (az eldobná a beszélgetés kontextusát).</summary>
+    public bool ChannelEnabled { get; set; } = true;
+
+    /// <summary>A bot saját, titkos MCP-végpontja a bot-csatornához (ADR-0005), pl.
+    /// `http://127.0.0.1:51234/mcp/&lt;token&gt;`. A <see cref="BotSessionManager"/> tölti ki az
+    /// indítás ELŐTT; null, ha a csatorna-szerver nem indult el — ilyenkor a bot egyszerűen
+    /// csatorna-tool-ok nélkül fut tovább.</summary>
+    public string? ChannelMcpUrl { get; set; }
 
     public List<ScheduledTask> ScheduledTasks { get; set; } = new();
     public List<LogLine> AccumulatedLog { get; } = new();
@@ -183,10 +219,21 @@ public class BotSession
         // InteractiveApproval dönt: vagy megkérdezi a felhasználót (UC-018), vagy — kikapcsolva —
         // némán elutasításra kerül. Az AllowedTools-ot a Settings felületen bot-onként lehet
         // karbantartani (lásd BotSessionManager.ApplySettings).
-        if (AllowedTools.Count > 0)
+        //
+        // A csatorna tool-jai (UC-021) mindig bekerülnek, a bot saját listájától függetlenül:
+        // a bot-bot üzenetváltás szándékosan nem jóváhagyás-köteles, különben minden delegálás
+        // megállna, amíg nincs valaki a gép előtt. A csatornát a ChannelEnabled kapcsolja ki,
+        // nem az engedélylista. A szerver-szintű szabály (`mcp__<szerver>`) az adott szerver
+        // MINDEN tool-ját fedi. A lista szándékosan NEM íródik vissza az AllowedTools-ba: az a
+        // felhasználó beállítása, ez pedig a rendszer saját, belső képessége.
+        var effectiveAllowedTools = new List<string>(AllowedTools);
+        if (!string.IsNullOrWhiteSpace(ChannelMcpUrl))
+            effectiveAllowedTools.Add($"mcp__{ChannelMcpServerName}");
+
+        if (effectiveAllowedTools.Count > 0)
         {
             psi.ArgumentList.Add("--allowedTools");
-            psi.ArgumentList.Add(string.Join(",", AllowedTools));
+            psi.ArgumentList.Add(string.Join(",", effectiveAllowedTools));
         }
 
         // Ez kapcsolja be a kétirányú control-protokollt: a claude.exe a stdout-ra küld egy
@@ -196,6 +243,25 @@ public class BotSession
         {
             psi.ArgumentList.Add("--permission-prompt-tool");
             psi.ArgumentList.Add("stdio");
+        }
+
+        // A bot-csatorna MCP szervere (UC-021, ADR-0005). Szándékosan inline JSON-ként adjuk át,
+        // nem a workspace-be írt .mcp.json-ként: a projekt-hatókörű .mcp.json használatához a CLI
+        // külön jóváhagyást kér, amit headless módban senki nem tudna megadni. A
+        // --strict-mcp-config NEM kerül ide: a felhasználó globális MCP-szerverei maradjanak
+        // elérhetők a bot számára.
+        if (!string.IsNullOrWhiteSpace(ChannelMcpUrl))
+        {
+            var mcpConfig = JsonSerializer.Serialize(new
+            {
+                mcpServers = new Dictionary<string, object>
+                {
+                    [ChannelMcpServerName] = new { type = "http", url = ChannelMcpUrl },
+                },
+            });
+
+            psi.ArgumentList.Add("--mcp-config");
+            psi.ArgumentList.Add(mcpConfig);
         }
 
         // Ha a workspace gyökerében van egy agent.md, a tartalma system prompt kiegészítésként
@@ -230,11 +296,16 @@ public class BotSession
     /// <summary>
     /// Promptot küld a bot session-jének. Visszaadja a prompt uuid-ját, amivel a befejezés
     /// (<see cref="TurnCompleted"/>) később azonosítható — vagy null-t, ha nem sikerült elküldeni.
-    /// A <paramref name="taskName"/> megadásakor a prompt feladat-futásként jelenik meg a
-    /// csevegésben (UC-013); ilyenkor a felhasználói üzenet is eseményt vált ki, mert a felület
-    /// ezt — a kézi üzenetküldéssel ellentétben — nem jeleníti meg előre.
+    /// A nem kézi eredetű promptok (<paramref name="origin"/>) eseményt is kiváltanak, mert azokat
+    /// a felület — a kézi üzenetküldéssel ellentétben — nem jeleníti meg előre. Az
+    /// <paramref name="originLabel"/> az ütemezett feladat neve (UC-013), kézi és csatorna-eredet
+    /// esetén nincs szerepe.
     /// </summary>
-    public string? SendPrompt(string text, IReadOnlyList<string>? attachmentNames = null, string? taskName = null)
+    public string? SendPrompt(
+        string text,
+        IReadOnlyList<string>? attachmentNames = null,
+        PromptOrigin origin = PromptOrigin.Manual,
+        string? originLabel = null)
     {
         var hasAttachments = attachmentNames != null && attachmentNames.Count > 0;
         if (_process == null || _process.HasExited || (string.IsNullOrWhiteSpace(text) && !hasAttachments))
@@ -273,21 +344,33 @@ public class BotSession
             lock (_turnGate)
             {
                 _activeTurns.Add(uuid);
-                if (taskName != null)
+
+                // Csak az ütemezett kör esik a rövidebb jóváhagyási határidő alá: ott tipikusan
+                // nincs a gép előtt senki. Egy csatorna-üzenet ugyanúgy spontán érkezik, mint egy
+                // kézi üzenet, ezért azzal azonos türelmi időt kap.
+                if (origin == PromptOrigin.Scheduled)
                     _scheduledTurns.Add(uuid);
             }
 
-            if (taskName != null)
+            switch (origin)
             {
-                // Feladat-futás: a felület nem jelenítette meg előre, ezért eseményt is dobunk.
-                RaiseLog(LogKind.Info, $"⏱ Ütemezett feladat: {taskName}");
-                RaiseLog(LogKind.User, displayText);
-            }
-            else
-            {
-                // Kézi üzenet: csak a history-ba kerül be (a kiválasztott bot React oldala már
-                // optimistán megjelenítette) — nincs esemény-dobás, hogy ne duplikálódjon.
-                AccumulatedLog.Add(new LogLine(LogKind.User, displayText));
+                case PromptOrigin.Scheduled:
+                    // Feladat-futás: a felület nem jelenítette meg előre, ezért eseményt is dobunk.
+                    RaiseLog(LogKind.Info, $"⏱ Ütemezett feladat: {originLabel}");
+                    RaiseLog(LogKind.User, displayText);
+                    break;
+
+                case PromptOrigin.Channel:
+                    // Csatorna-üzenet: szintén eseményt dobunk, de saját sortípussal — ez nem a
+                    // felhasználó üzenete, csak megfigyelhető bot-bot forgalom (UC-021).
+                    RaiseLog(LogKind.Channel, displayText);
+                    break;
+
+                default:
+                    // Kézi üzenet: csak a history-ba kerül be (a kiválasztott bot React oldala már
+                    // optimistán megjelenítette) — nincs esemény-dobás, hogy ne duplikálódjon.
+                    AccumulatedLog.Add(new LogLine(LogKind.User, displayText));
+                    break;
             }
 
             // Azonnali, vizuális jelzés, hogy elindult a feldolgozás — a claude.exe tényleges
@@ -353,6 +436,26 @@ public class BotSession
         Stop();
         Start();
     }
+
+    /// <summary>A legrégebbi még nyitott kör uuid-ja, vagy null, ha a bot épp nem dolgozik.
+    /// A <see cref="BotMessageBus"/> ebből állapítja meg, hogy egy most publikált üzenet melyik
+    /// kézbesített üzenetre válasz (lánc-mélység). Ugyanaz a heurisztika, amit a
+    /// <see cref="CreatePendingRequest"/> is használ — és ugyanaz a korlátja: átfedő körök esetén
+    /// tévedhet, itt legfeljebb egy rosszul számolt lánc-mélység árán.</summary>
+    public string? CurrentTurnUuid
+    {
+        get
+        {
+            lock (_turnGate)
+            {
+                return _activeTurns.Count > 0 ? _activeTurns[0] : null;
+            }
+        }
+    }
+
+    /// <summary>Csatorna-esemény beírása a bot csevegésébe (UC-021) — ezen keresztül kerül be a
+    /// KIMENŐ üzenet is a küldő folyamába, hiszen azt nem a claude.exe kimenete hozza.</summary>
+    public void LogChannelActivity(string text) => RaiseLog(LogKind.Channel, text);
 
     /// <summary>true-ra állítja a jelzőt, ha korábban false volt. A visszatérési érték mondja meg
     /// a hívónak, hogy ténylegesen VÁLTOZOTT-e az állapot — erre épül, hogy a feliratkozóknak
