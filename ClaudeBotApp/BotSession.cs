@@ -183,7 +183,9 @@ public class BotSession
 
         var psi = new ProcessStartInfo
         {
-            FileName = "claude.exe",
+            // Az indulás során feloldott, teljes útvonal — nem puszta fájlnév, amit a rendszer
+            // keresési sorrendje oldana fel folyamatonként újra (ld. ClaudeCliLocator).
+            FileName = ClaudeCliLocator.ExecutablePath,
             WorkingDirectory = FolderPath,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,

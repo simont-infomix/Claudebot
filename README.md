@@ -161,6 +161,27 @@ egyedi chat-felületet ad az alkalmazáson belül. Az ötlet a fenti Asszisztens
 - Beállítások nézet (SettingsView)
 - Bot-sablon (`BotTemplate/`) a munkaterület alapértelmezett `.claude/skills` tartalmához
 
+**Telepítés / költözés másik gépre:**
+
+A Release build **self-contained**: a .NET futtatókörnyezet (beleértve az ASP.NET Core részt, amit
+a bot-csatorna Kestrelje igényel) a kimeneti mappában van, így a célgépre semmilyen .NET runtime-ot
+nem kell telepíteni. A `dotnet build -c Release` kimenete (`ClaudeBotApp/bin/Release/net10.0-windows/`)
+önmagában átmásolható.
+
+Amire a célgépen szükség van:
+
+1. **Claude Code CLI, natív telepítéssel** (`claude.exe`) — bejelentkezve. Az alkalmazás induláskor
+   megkeresi: előbb a `CLAUDEBOT_CLI_PATH` környezeti változót (ha be van állítva, az dönt), majd a
+   `PATH` bejegyzéseit, végül a natív telepítő alapértelmezett helyét (`%USERPROFILE%\.local\bin`).
+   Ha nincs meg, egy hibaüzenet után **el sem indul** — így nem botonkénti, érthetetlen hibaként
+   jelentkezik a hiány. Az npm-es telepítés (`claude.cmd`) **nem elég**: a headless indítás natív
+   `claude.exe`-t igényel, de a hibaüzenet külön jelzi, ha ilyet talált a gépen.
+2. **WebView2 Runtime** (Windows 10/11-en jellemzően előre telepítve).
+3. A **`Bots/` mappa** átmásolása a kimeneti mappába, ha a meglévő botokat (beszélgetés-előzmény
+   nélkül: munkamappa, `agent.md`, beállítások, ütemezett feladatok) vinni szeretnéd.
+4. A botok engedélylistájában hivatkozott **globális MCP-szerverek** (pl. Azure DevOps) beállítása a
+   célgépen.
+
 **Dokumentáció:** a részletes terv és a formális specifikációs dokumentumok a `ClaudeBot/` mappában
 élnek, külön a fenti tudástár-rendszertől:
 - `ClaudeBot/specification.md` — az eredeti, informális terv (v1 hatókör, architektúra, elvetett alternatívák)

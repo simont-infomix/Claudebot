@@ -17,6 +17,24 @@
     <Description>Claude Code botokat futtató és ütemező asztali alkalmazás</Description>
   </PropertyGroup>
 
+  <!-- Release buildben önálló (self-contained) a kimenet: a .NET futtatókörnyezet bekerül a
+       kimeneti mappába, így a célgépre semmilyen runtime-ot nem kell külön telepíteni. Ez a
+       bot-csatorna (ADR-0005) miatt vált fontossá: azzal az ASP.NET Core shared framework is
+       előfeltétellé vált, ami nélkül az alkalmazás el sem indul — ezt egy másik gépre telepítve
+       nehéz lenne kitalálni. Debug marad framework-dependent, ott a gyors, kicsi build számít.
+
+       AppendRuntimeIdentifierToOutputPath=false: a kimenet a megszokott helyen marad
+       (bin\Release\net10.0-windows), nem csúszik egy win-x64 alkönyvtárba — a botok
+       munkamappája (Bots\) is ott él, és nem akarjuk, hogy egy build "elveszítse" őket.
+
+       Trimming szándékosan nincs bekapcsolva: az MCP szerver reflectionnel deríti fel a
+       tool-okat, a trimmer pedig pont az ilyen, kódból nem látható hivatkozásokat vágná ki. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
   <!-- Ugyanaz az ikon .NET erőforrásként is, hogy futásidőben be tudjuk tölteni az ablak- és a
        tálcaikonhoz — így mindhárom helyen garantáltan ugyanaz a kép jelenik meg. -->
   <ItemGroup>
