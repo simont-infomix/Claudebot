@@ -110,8 +110,7 @@ A `docs/` mappa a projekt formális dokumentumkészlete, a `docs/Index.md` a tar
   indoklása és az elvetett alternatívák;
 - **Architektúra** (`docs/architecture-c1.md`, `architecture-c2/`, `architecture-c3/`) — C4-modell
   szerinti diagramok;
-- **UI design szabályzat** (`docs/ui-design-guideline.md`);
-- **Hibák** (`docs/bugs/`) — a feltárt hibák leírása és a javításuk kontextusa.
+- **UI design szabályzat** (`docs/ui-design-guideline.md`).
 
 A dokumentumok karbantartásának szabályait (frontmatter, elnevezés, mikor kell új use case vagy
 ADR) a `docs/CLAUDE.md` rögzíti.

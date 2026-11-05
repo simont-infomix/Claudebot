@@ -2,9 +2,9 @@
 id: decision-04
 title: "ADR-0004 — Interaktív tool-jóváhagyás a claude.exe stdio control-protokollján"
 type: adr
-version: 0.2.0
+version: 0.2.1
 created: 2026-10-30
-updated: 2026-10-30
+updated: 2026-11-05
 references:
   - uc-009
   - uc-018
@@ -28,7 +28,7 @@ A ClaudeBot headless (`-p`) módban futtatja a `claude.exe`-t. Ebben a módban a
 nincs terminálja, ahol jóváhagyást kérhetne, a host pedig sosem épített ki ilyen csatornát:
 minden olyan eszközhívás, amit az `--allowedTools` lista vagy a Permission mode nem engedett
 automatikusan, **némán elutasításra került**. A felhasználó ebből annyit látott, hogy a bot
-"kérdez valamit", de válaszolni nem tudott rá (BUG-004).
+"kérdez valamit", de válaszolni nem tudott rá.
 
 A hiányzó csatorna a tervezés kezdetén **nem volt dokumentált**: sem a CLI `--help`-je, sem a
 nyilvános dokumentáció nem írja le a stream-json kétirányú control-protokollját. A döntés
@@ -111,7 +111,7 @@ a felhasználótól. Éles méréssel igazolva:
 - **For:** Nulla kockázat, nincs függés nem dokumentált viselkedéstől.
 - **Against:** Nem oldja meg a problémát: a felhasználónak előre ki kellene találnia, mire lesz
   szüksége a botnak, és a hiányzó engedély továbbra is néma elutasítás maradna.
-- **Why not chosen:** Épp ez a BUG-004 tárgya.
+- **Why not chosen:** Épp ez a kiinduló állapot, amit ez a döntés felszámol.
 
 **C) Modális dialógus a kérés megjelenítésére**
 - **For:** Lehetetlen átsiklani fölötte.
@@ -153,5 +153,4 @@ eszközt engedélyezte.
 
 `ClaudeBotApp/BotSession.cs`, `ClaudeBotApp/PermissionRequest.cs`,
 `ClaudeBotApp/BotTaskScheduler.cs`, `ClaudeBotApp/react-ui/src/components/PermissionCard.tsx`,
-`ClaudeBotApp/react-ui/src/components/QuestionCard.tsx`,
-`docs/bugs/bug-004-nincs-interaktiv-jovahagyas-csatorna.md`.
+`ClaudeBotApp/react-ui/src/components/QuestionCard.tsx`.

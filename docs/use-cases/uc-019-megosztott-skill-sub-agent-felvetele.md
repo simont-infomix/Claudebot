@@ -2,12 +2,11 @@
 id: uc-019
 title: "UC-019 — Megosztott skill vagy sub agent felvétele minden bot számára"
 type: use-case
-version: 0.1.0
+version: 0.1.1
 created: 2026-10-30
-updated: 2026-10-30
+updated: 2026-11-05
 references:
   - uc-009
-  - bug-006
 ---
 
 1. **Name:** Megosztott skill vagy sub agent felvétele minden bot számára

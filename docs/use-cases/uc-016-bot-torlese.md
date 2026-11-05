@@ -2,9 +2,9 @@
 id: uc-016
 title: "UC-016 — Bot végleges törlése"
 type: use-case
-version: 0.2.0
+version: 0.2.1
 created: 2026-10-29
-updated: 2026-10-29
+updated: 2026-11-05
 references:
   - architecture-c3-react-ui
   - architecture-c3-winforms-host
@@ -43,7 +43,7 @@ flowchart TD
 ```
 
 5. **Potential errors:** A mappa törlése sikertelen, mert valami kívülről fogja (pl. egy hozzá
-   nyitott terminál — BUG-001) → a felhasználó hibaüzenetet kap, ami megmondja a teendőt: zárja be
+   nyitott terminál) → a felhasználó hibaüzenetet kap, ami megmondja a teendőt: zárja be
    a mappát használó programot, törölje kézzel a mappát, és indítsa újra az alkalmazást. A bot a
    listában marad. **A törlés ekkor részlegesen végbemehetett**: a mappa tartalma eltűnhetett,
    miközben maga a (már üres) mappa — amit valami még fogva tart — megmarad; emiatt a kézi
