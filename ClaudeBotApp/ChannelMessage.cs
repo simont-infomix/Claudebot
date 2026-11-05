@@ -9,6 +9,12 @@ public record ChannelMessage(
     string FromDisplayName,
     IReadOnlyList<string> To,
     string Text,
+
+    /// <summary>A mellékelt fájlok neve a KÜLDŐ munkamappájához képest. A címzetteknél ugyanezek
+    /// a fájlok más útvonalon élnek (minden bot csak a saját munkamappáját látja), ezért itt a
+    /// küldő-oldali nevet őrizzük meg — ez az, amit a felhasználó és a küldő bot is ismer.</summary>
+    IReadOnlyList<string> Files,
+
     DateTime SentAt,
 
     /// <summary>Hányadik láncszem: a felhasználótól/ütemezőtől indult körből küldött üzenet 0, az

@@ -2,9 +2,9 @@
 id: decision-05
 title: "ADR-0005 — Bot-bot üzenetcsatorna a hosztba épített MCP szerveren"
 type: adr
-version: 0.1.0
+version: 0.2.0
 created: 2026-11-02
-updated: 2026-11-02
+updated: 2026-11-05
 references:
   - uc-009
   - uc-021
@@ -71,8 +71,8 @@ valósítják meg**, a következő kiegészítésekkel:
 4. **Stateless HTTP transzport.** Minden tool-hívás önálló kérés, saját DI-scope-ban — ebben él a
    hívó bot azonosítása, így az megbízhatóan eljut a tool implementációjáig.
 5. **Három eszköz:** `list_bots` (kik vannak a csatornán, futnak-e, mivel foglalkoznak — az
-   `agent.md` első érdemi sorából), `send_message` (üzenet opcionális címzett-listával),
-   `recent_messages` (felzárkózás arra, amit a bot kihagyott).
+   `agent.md` első érdemi sorából), `send_message` (üzenet opcionális címzett-listával és
+   opcionális fájlokkal), `recent_messages` (felzárkózás arra, amit a bot kihagyott).
 6. **A csatorna eszközei mindig engedélyezettek**, a bot saját `AllowedTools` listájától
    függetlenül (a szerver-szintű `mcp__claudebots` szabállyal). A bot-bot üzenetváltás szándékosan
    nem jóváhagyás-köteles: különben minden delegálás megállna, amíg nincs valaki a gép előtt. A
@@ -94,13 +94,23 @@ valósítják meg**, a következő kiegészítésekkel:
     rendes bot-válaszként érkezik.
 12. **A csatorna hiánya nem végzetes.** Ha a szerver nem indul el, a botok egyszerűen
     csatorna-eszközök nélkül futnak tovább, minden más funkció változatlan.
+13. **A fájlátadás másolással történik, nem megosztott eléréssel.** A botok munkamappái el vannak
+    különítve; a hoszt a küldő mappájából a címzett mappájába másolja a fájlt, és a kézbesített
+    promptban `@` hivatkozást ad rá — ugyanaz a mechanizmus, amivel a felhasználó csatol fájlt a
+    csevegésben. A másolat a címzettnél **küldőnkénti mappába** kerül (`_bejovo/<küldő>/`), nem a
+    munkamappa gyökerébe: ott egy azonos nevű fájl némán felülírná a címzett saját munkáját. A
+    küldő csak a saját mappáján belülről küldhet (a feloldott útvonalat ellenőrizzük), egy
+    üzenethez legfeljebb 5 fájl mehet, egyenként legfeljebb 10 MB — a csatorna munkaanyagok
+    átadására való, nem fájlmásolásra. Ezek a korlátok, akárcsak a hibás fájlnév, a küldőnek szóló
+    magyarázó szöveggel járnak, nem néma elhagyással.
 
 ## Alternatives considered
 
 **A) Híd-folyamat MCP szerverként, stdio transzporton (bot-onként egy)**
 - **For:** Nem kell HTTP-réteg a hosztba; az stdio a legegyszerűbb MCP transzport.
 - **Against:** Bot-onként egy extra gyermekfolyamat, aminek az életciklusát kezelni kell (és ami
-  az app összeomlásakor árván maradhat — ezt a hibát már egyszer elszenvedtük, BUG-001). A
+  az app összeomlásakor árván maradhat — ezt a hibát a bot-terminálokkal már egyszer
+  elszenvedtük). A
   híd-folyamatnak ráadásul külön IPC-csatorna kellene *vissza* a hoszthoz, vagyis a problémát csak
   eltolja egy réteggel.
 - **Why not chosen:** Több mozgó alkatrész ugyanazért a funkcióért, miközben az in-process szerver
@@ -143,6 +153,10 @@ szakterület-térképet, így a delegálás nem vaktában történik.
   nem adat- vagy biztonsági hiba.
 - **A csatorna-előzmény memóriában él** (az utolsó 200 üzenet), és az app újraindításakor
   elveszik — ahogy a beszélgetés-előzmény is.
+- **Az átküldött fájlok sokszorozódnak a lemezen,** és a címzett mappájában maradnak az üzenet
+  feldolgozása után is: a `_bejovo/` mappa takarítása a felhasználóra marad. Cserébe a címzett
+  később is vissza tud nyúlni a kapott anyaghoz, és a másolat nem változik meg a háta mögött, ha
+  a küldő közben átírja az eredetit.
 - **Egy bot megszólíthat olyan botot is, amire a felhasználó nem számít.** A védelem a
   bot-onkénti kikapcsolhatóság és a csevegésben látható forgalom; hozzáférési mátrix (ki kinek
   üzenhet) szándékosan nem készült — az a jelenlegi, néhány botos használathoz aránytalan.

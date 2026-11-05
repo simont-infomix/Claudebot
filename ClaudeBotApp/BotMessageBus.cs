@@ -30,6 +30,18 @@ public class BotMessageBus
     /// újraindításakor törlődik — ahogy a beszélgetés-előzmény is.</summary>
     private const int HistoryLimit = 200;
 
+    /// <summary>A címzett munkamappáján belüli mappa, ahová a kapott fájlok kerülnek, küldőnként
+    /// külön alkönyvtárba. Szándékosan nem a munkamappa gyökerébe másolunk: ott egy azonos nevű
+    /// fájl némán felülírná a címzett saját munkáját, itt viszont a küldő legfeljebb a korábban
+    /// általa küldött fájlt írja felül.</summary>
+    public const string IncomingFolderName = "_bejovo";
+
+    /// <summary>Üzenetenként ennyi fájl mehet, egyenként legfeljebb ekkora. A csatorna
+    /// munkaanyagok átadására való, nem fájlmásolásra: a nagy adathalmaz másolása mindkét bot
+    /// kontextusát és a lemezt is terhelné, ezért inkább korán, érthető hibával elutasítjuk.</summary>
+    private const int MaxFilesPerMessage = 5;
+    private const long MaxFileBytes = 10L * 1024 * 1024;
+
     private readonly BotSessionManager _manager;
     private readonly object _gate = new();
 
@@ -60,18 +72,32 @@ public class BotMessageBus
     /// <summary>
     /// Üzenet a közös csatornára. A <paramref name="to"/> üres/null értéke esetén minden másik
     /// (futó, csatornán részt vevő) bot megkapja.
+    /// A <paramref name="files"/> a küldő munkamappájához képest megadott fájlok, amiket a hoszt
+    /// minden címzett munkamappájába átmásol — a botok mappái el vannak különítve, egymás fájljait
+    /// közvetlenül nem érik el.
     /// A visszatérő szöveg magának a hívó botnak szól: ebből tudja meg, kihez jutott el az üzenet,
     /// kihez nem és miért — enélkül vakon küldene egy épp leállított botnak.
     /// </summary>
-    public string Publish(BotSession from, string message, IReadOnlyList<string>? to)
+    public string Publish(
+        BotSession from, string message, IReadOnlyList<string>? to, IReadOnlyList<string>? files = null)
     {
-        if (string.IsNullOrWhiteSpace(message))
+        var hasFiles = files != null && files.Count > 0;
+        if (string.IsNullOrWhiteSpace(message) && !hasFiles)
             return "Az üzenet üres volt, ezért nem került ki a csatornára.";
 
         if (!from.ChannelEnabled)
         {
             return "Ez a bot nincs rajta a közös csatornán (a felhasználó kikapcsolta a " +
                    "beállításainál), ezért az üzenet nem került kiküldésre.";
+        }
+
+        // A fájlok feloldása szándékosan a korlátok ELŐTT fut: egy elgépelt fájlnév miatt ne
+        // fogyjon a küldési kvóta, és a bot azonnal, érthetően tudja javítani.
+        var (attachments, fileProblems) = ResolveFiles(from, files);
+        if (attachments.Count == 0 && string.IsNullOrWhiteSpace(message))
+        {
+            return "Az üzenetnek nem volt szövege, a megadott fájl(oka)t pedig nem lehetett " +
+                   "elküldeni, ezért semmi nem került ki a csatornára. " + string.Join(" ", fileProblems);
         }
 
         var now = DateTime.Now;
@@ -100,6 +126,7 @@ public class BotMessageBus
         }
 
         var (recipients, problems) = ResolveRecipients(from, to);
+        problems.InsertRange(0, fileProblems);
 
         if (recipients.Count == 0)
         {
@@ -118,15 +145,25 @@ public class BotMessageBus
             from.Name,
             from.DisplayName,
             recipients.Select(r => r.Name).ToList(),
-            message.Trim(),
+            // Csak fájlt is lehet küldeni, ilyenkor a szöveg üres — a kézbesített prompt és a
+            // chat-jelzés is elbírja (ld. FormatDelivery).
+            (message ?? "").Trim(),
+            attachments.Select(a => a.Name).ToList(),
             now,
             hop);
 
         var delivered = new List<string>();
         foreach (var recipient in recipients)
         {
+            // A másolásnak meg kell előznie a kézbesítést: a prompt @-hivatkozásai a címzett
+            // munkamappájában lévő, már létező másolatokra mutatnak.
+            var (copied, copyProblem) = CopyToRecipient(from, recipient, attachments);
+            if (copyProblem != null)
+                problems.Add(copyProblem);
+
             // Zárolás nélkül: a SendPrompt log-eseményt vált ki, ami a UI-szálra marshalol.
-            var uuid = recipient.SendPrompt(FormatDelivery(channelMessage), null, PromptOrigin.Channel);
+            var uuid = recipient.SendPrompt(
+                FormatDelivery(channelMessage, copied.Count > 0), copied, PromptOrigin.Channel);
             if (uuid == null)
             {
                 problems.Add($"„{recipient.DisplayName}” nem vette át az üzenetet (a folyamata nem érhető el).");
@@ -149,14 +186,21 @@ public class BotMessageBus
         }
 
         // A küldő csevegésében is látszódjon, mit küldött ki — enélkül a felhasználó számára néma
-        // maradna, hogy a bot a háttérben megszólított valakit.
+        // maradna, hogy a bot a háttérben megszólított valakit, és főleg az, hogy fájlt is adott át.
+        var fileNote = channelMessage.Files.Count > 0
+            ? $" 📎 {string.Join(", ", channelMessage.Files)}"
+            : "";
         from.LogChannelActivity(
-            $"📣 Üzenet a csatornára → {string.Join(", ", delivered)}: {Shorten(channelMessage.Text)}");
+            $"📣 Üzenet a csatornára → {string.Join(", ", delivered)}: {Shorten(channelMessage.Text)}{fileNote}");
 
         if (delivered.Count == 0)
             return "Az üzenet nem jutott el senkihez. " + string.Join(" ", problems);
 
-        var result = $"Az üzenet kiment a következő bot(ok)nak: {string.Join(", ", delivered)}. " +
+        var sentWhat = channelMessage.Files.Count > 0
+            ? $"Az üzenet és a mellékelt fájl(ok) — {string.Join(", ", channelMessage.Files)} — kimentek"
+            : "Az üzenet kiment";
+
+        var result = $"{sentWhat} a következő bot(ok)nak: {string.Join(", ", delivered)}. " +
                      "A válaszuk — ha válaszolnak — külön üzenetként fog megérkezni hozzád, nem " +
                      "ennek a tool-hívásnak a visszatérési értékeként.";
 
@@ -233,15 +277,130 @@ public class BotMessageBus
         return (recipients, problems);
     }
 
+    /// <summary>
+    /// A küldő által megadott fájlok feloldása a saját munkamappájához képest. A bot csak a saját
+    /// mappájából küldhet: a feloldott útvonalnak azon belül kell maradnia, különben a csatorna a
+    /// gép tetszőleges fájljának átmásolására lenne használható.
+    /// A kihagyott fájlokról szöveges indoklás készül — ez az egyetlen visszajelzés, amit a küldő kap.
+    /// </summary>
+    private static (List<ChannelAttachment> Files, List<string> Problems) ResolveFiles(
+        BotSession from, IReadOnlyList<string>? files)
+    {
+        var resolved = new List<ChannelAttachment>();
+        var problems = new List<string>();
+
+        if (files == null || files.Count == 0)
+            return (resolved, problems);
+
+        var root = Path.GetFullPath(from.FolderPath);
+        var rootPrefix = root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+        foreach (var requested in files.Select(f => f?.Trim()).Where(f => !string.IsNullOrEmpty(f)).Distinct())
+        {
+            if (resolved.Count >= MaxFilesPerMessage)
+            {
+                problems.Add($"Egy üzenethez legfeljebb {MaxFilesPerMessage} fájlt lehet csatolni, " +
+                             $"ezért „{requested}” és az utána megadottak kimaradtak.");
+                break;
+            }
+
+            string fullPath;
+            try
+            {
+                fullPath = Path.GetFullPath(Path.Combine(root, requested!));
+            }
+            catch (ArgumentException)
+            {
+                problems.Add($"A „{requested}” név nem értelmezhető fájlútvonalként.");
+                continue;
+            }
+
+            if (!fullPath.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                problems.Add($"A „{requested}” a munkamappádon kívülre mutat — csak a saját " +
+                             "munkamappádban lévő fájlt küldhetsz.");
+                continue;
+            }
+
+            var info = new FileInfo(fullPath);
+            if (!info.Exists)
+            {
+                problems.Add($"Nincs „{requested}” nevű fájl a munkamappádban.");
+                continue;
+            }
+
+            if (info.Length > MaxFileBytes)
+            {
+                problems.Add($"A „{requested}” nagyobb a megengedett {MaxFileBytes / (1024 * 1024)} MB-nál, " +
+                             "ezért nem került elküldésre.");
+                continue;
+            }
+
+            // A küldő-oldali nevet a megjelenítéshez őrizzük meg, a célnevet viszont lapítjuk:
+            // a címzettnél a fájl a saját `_bejovo/<küldő>/` mappájába kerül, almappák nélkül.
+            resolved.Add(new ChannelAttachment(fullPath, requested!, Path.GetFileName(fullPath)));
+        }
+
+        return (resolved, problems);
+    }
+
+    /// <summary>
+    /// Átmásolja a mellékleteket a címzett munkamappájába, és visszaadja a NEKI szóló, munkamappához
+    /// képesti relatív neveket — ezekből lesz a prompt `@` hivatkozása. A botok mappái el vannak
+    /// különítve, ezért a másolás elkerülhetetlen: a címzett a küldő mappáját nem éri el.
+    /// </summary>
+    private static (List<string> Copied, string? Problem) CopyToRecipient(
+        BotSession from, BotSession recipient, IReadOnlyList<ChannelAttachment> attachments)
+    {
+        var copied = new List<string>();
+        if (attachments.Count == 0)
+            return (copied, null);
+
+        var targetDir = Path.Combine(recipient.FolderPath, IncomingFolderName, from.Name);
+
+        try
+        {
+            Directory.CreateDirectory(targetDir);
+
+            foreach (var attachment in attachments)
+            {
+                File.Copy(attachment.SourcePath, Path.Combine(targetDir, attachment.TargetFileName), overwrite: true);
+
+                // A `@` hivatkozásban és a chat 📎 jelzésében is ez a relatív út jelenik meg; a
+                // perjel szándékosan `/`, mert a claude.exe prompt-hivatkozásai ezt várják.
+                copied.Add($"{IncomingFolderName}/{from.Name}/{attachment.TargetFileName}");
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (copied, $"„{recipient.DisplayName}” munkamappájába nem sikerült átmásolni a " +
+                            $"fájl(oka)t: {ex.Message}");
+        }
+
+        return (copied, null);
+    }
+
     /// <summary>A kézbesített prompt. A fejléc és a záró útmutató azért kell, mert a címzett bot
     /// számára ez egy sima felhasználói kör: enélkül nem tudná, kitől jött, és hogy mivel
-    /// válaszolhat.</summary>
-    private static string FormatDelivery(ChannelMessage message) =>
-        $"[Bot-csatorna] „{message.FromDisplayName}” üzenete:\n\n" +
-        $"{message.Text}\n\n" +
-        $"— Ha válaszolsz, hívd az `mcp__{BotSession.ChannelMcpServerName}__send_message` tool-t a " +
-        $"`to: [\"{message.FromBotId}\"]` paraméterrel. Ha a kérés nem rád tartozik, vagy nem tudsz " +
-        "érdemben hozzátenni, nyugodtan hagyd figyelmen kívül — nem kötelező válaszolni.";
+    /// válaszolhat. A fájlokról külön mondat szól: a prompt végére kerülő `@` hivatkozásokból
+    /// magától nem derülne ki, hogy azokat egy másik bot küldte, és hogy szabadon használhatja őket.</summary>
+    private static string FormatDelivery(ChannelMessage message, bool withFiles)
+    {
+        var fileNote = withFiles
+            ? "A küldő fájlt is mellékelt: a másolatuk a te munkamappádban van, a prompt végi " +
+              "`@` hivatkozások mutatnak rájuk."
+            : "";
+
+        var body = string.IsNullOrWhiteSpace(message.Text)
+            ? fileNote
+            : fileNote.Length == 0 ? message.Text : $"{message.Text}\n\n{fileNote}";
+
+        return $"[Bot-csatorna] „{message.FromDisplayName}” üzenete:\n\n" +
+               $"{body}\n\n" +
+               $"— Ha válaszolsz, hívd az `mcp__{BotSession.ChannelMcpServerName}__send_message` tool-t a " +
+               $"`to: [\"{message.FromBotId}\"]` paraméterrel. Ha a kérés nem rád tartozik, vagy nem tudsz " +
+               "érdemben hozzátenni, nyugodtan hagyd figyelmen kívül — nem kötelező válaszolni.";
+    }
 
     /// <summary>A csúszóablakos korlát ellenőrzése és könyvelése egy lépésben. A <see cref="_gate"/>
     /// alatt hívandó.</summary>
@@ -303,3 +462,9 @@ public class BotMessageBus
         return singleLine.Length > 200 ? singleLine[..200] + "…" : singleLine;
     }
 }
+
+/// <summary>Egy csatolmány a kiküldés közben: hol van a küldőnél, hogyan hivatkozott rá a küldő bot
+/// (ez jelenik meg a felületen és a naplóban), és milyen néven kerül a címzett mappájába. A három
+/// név azért válik szét, mert a küldő almappából is küldhet, a címzettnél viszont lapítva, egy
+/// küldőnkénti mappában landol minden fájl.</summary>
+internal sealed record ChannelAttachment(string SourcePath, string Name, string TargetFileName);

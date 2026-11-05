@@ -200,23 +200,28 @@ public sealed class ChannelTools
     }
 
     [McpServerTool(Name = "send_message"),
-     Description("Üzenetet küld a többi botnak a közös csatornán: feladat delegálása, kérdés, vagy " +
-                 "egy korábbi kérdésre adott válasz. A kommunikáció ASZINKRON — ez a hívás azonnal " +
-                 "visszatér, a címzett válasza (ha válaszol) később, külön üzenetként érkezik meg " +
-                 "hozzád. Mindig fogalmazz önmagában érthetően: a címzett nem látja a te " +
-                 "beszélgetésedet, csak ezt a szöveget kapja meg.")]
+     Description("Üzenetet — és ha kell, fájlokat — küld a többi botnak a közös csatornán: feladat " +
+                 "delegálása, kérdés, vagy egy korábbi kérdésre adott válasz. A kommunikáció " +
+                 "ASZINKRON — ez a hívás azonnal visszatér, a címzett válasza (ha válaszol) később, " +
+                 "külön üzenetként érkezik meg hozzád. Mindig fogalmazz önmagában érthetően: a " +
+                 "címzett nem látja a te beszélgetésedet, csak ezt a szöveget kapja meg.")]
     public string SendMessage(
         [Description("Az üzenet szövege. Írd bele a szükséges kontextust is, és azt, hogy pontosan " +
                      "mit vársz a címzettől.")]
         string message,
         [Description("A címzett bot(ok) neve a `list_bots` szerint. Ha elhagyod, az üzenet minden " +
                      "másik bothoz kimegy — ezt csak akkor tedd, ha tényleg mindenkinek szól.")]
-        string[]? to = null)
+        string[]? to = null,
+        [Description("Elküldendő fájlok a SAJÁT munkamappádhoz képest megadva (pl. " +
+                     "`jelentes.md` vagy `docs/terv.md`). A címzett nem látja a te mappádat, ezért a " +
+                     "rendszer másolatot készít nekik — a fájlt tehát előbb írd ki a munkamappádba. " +
+                     "A mappádon kívülre mutató útvonal nem megengedett.")]
+        string[]? files = null)
     {
         if (!TryGetContext(out var bus, out var caller, out var error))
             return error;
 
-        return bus.Publish(caller, message, to);
+        return bus.Publish(caller, message, to, files);
     }
 
     [McpServerTool(Name = "recent_messages", ReadOnly = true),
@@ -236,7 +241,10 @@ public sealed class ChannelTools
         var lines = messages.Select(m =>
         {
             var addressees = m.To.Count == 0 ? "mindenki" : string.Join(", ", m.To);
-            return $"[{m.SentAt:MM-dd HH:mm}] {m.FromDisplayName} → {addressees}: {m.Text}";
+            // A fájlnevek a küldő mappájához képest értendők — a címzettek a saját másolatukat
+            // a `_bejovo/<küldő>/` mappájukban találják.
+            var files = m.Files.Count == 0 ? "" : $" 📎 {string.Join(", ", m.Files)}";
+            return $"[{m.SentAt:MM-dd HH:mm}] {m.FromDisplayName} → {addressees}: {m.Text}{files}";
         });
 
         return string.Join("\n", lines);
