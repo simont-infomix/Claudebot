@@ -332,9 +332,7 @@ public class BotSessionManager
             .ToList();
         var newModel = string.IsNullOrWhiteSpace(model) ? null : model.Trim();
         var newEffort = string.IsNullOrWhiteSpace(effort) ? null : effort.Trim();
-        var newPermissionMode = string.IsNullOrWhiteSpace(permissionMode)
-            ? BotSession.DefaultPermissionMode
-            : permissionMode.Trim();
+        var newPermissionMode = BotSession.NormalizePermissionMode(permissionMode);
 
         // A claude.exe ezeket csak induláskor olvassa, ezért változásuk újraindítást igényel —
         // a feladatlista és a csatorna-részvétel viszont nem: azokat a scheduler, illetve a
@@ -595,7 +593,7 @@ public class BotSessionManager
             bot.Effort = meta?.Effort;
             if (!string.IsNullOrWhiteSpace(meta?.PermissionMode))
             {
-                bot.PermissionMode = meta.PermissionMode;
+                bot.PermissionMode = BotSession.NormalizePermissionMode(meta.PermissionMode);
             }
             if (meta?.InteractiveApproval != null)
             {

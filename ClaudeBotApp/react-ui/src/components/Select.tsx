@@ -4,6 +4,9 @@ import './Select.css';
 interface Option {
   label: string;
   value: string;
+  /** Opcionális magyarázat, ami csak a felugró listában jelenik meg az opció alatt — a
+   *  választást mutató gombra szándékosan nem kerül ki, hogy az egysoros maradjon. */
+  description?: string;
 }
 
 interface Props {
@@ -60,7 +63,9 @@ export function Select({ value, options, onChange, ariaLabel }: Props) {
             <button
               type="button"
               key={o.value}
-              className={`select__option${o.value === value ? ' select__option--selected' : ''}`}
+              className={`select__option${o.value === value ? ' select__option--selected' : ''}${
+                o.description ? ' select__option--described' : ''
+              }`}
               role="option"
               aria-selected={o.value === value}
               onClick={() => {
@@ -68,7 +73,8 @@ export function Select({ value, options, onChange, ariaLabel }: Props) {
                 setOpen(false);
               }}
             >
-              {o.label}
+              <span className="select__option-label">{o.label}</span>
+              {o.description && <span className="select__option-description">{o.description}</span>}
             </button>
           ))}
         </div>

@@ -55,6 +55,17 @@ public class BotSession
     public const string DebugLogFileName = "claudebot-stream.log";
     public const string DefaultPermissionMode = "acceptEdits";
 
+    /// <summary>A `claude --permission-mode` értékei közül a `default` és a `manual` ugyanaz a mód
+    /// (a CLI a `manual`-t `default`-ra fordítja). A Settings felület csak a `manual`-t kínálja,
+    /// ezért a meta-fájlból betöltött `default`-ot arra normalizáljuk — különben a legördülő nem
+    /// találná meg a mentett értéket, és némán mást mutatna, mint ami ténylegesen érvényes.</summary>
+    public static string NormalizePermissionMode(string? mode)
+    {
+        if (string.IsNullOrWhiteSpace(mode)) return DefaultPermissionMode;
+        var trimmed = mode.Trim();
+        return string.Equals(trimmed, "default", StringComparison.Ordinal) ? "manual" : trimmed;
+    }
+
     /// <summary>A bot-csatorna MCP szerverének neve a CLI felé. A bot oldalán ebből lesz a
     /// tool-ok előtagja (`mcp__claudebots__send_message`), ezért a <see cref="BotMessageBus"/>
     /// szövegei is erre hivatkoznak.</summary>
@@ -203,7 +214,7 @@ public class BotSession
         psi.ArgumentList.Add("stream-json");
         psi.ArgumentList.Add("--verbose");
         psi.ArgumentList.Add("--permission-mode");
-        psi.ArgumentList.Add(string.IsNullOrWhiteSpace(PermissionMode) ? DefaultPermissionMode : PermissionMode);
+        psi.ArgumentList.Add(NormalizePermissionMode(PermissionMode));
 
         if (!string.IsNullOrWhiteSpace(Model))
         {

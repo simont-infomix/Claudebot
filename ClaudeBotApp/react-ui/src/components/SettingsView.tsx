@@ -68,14 +68,48 @@ const EFFORT_OPTIONS = [
   { label: 'Max', value: 'max' },
 ];
 
+/** A `claude --permission-mode` hat értéke. A sorrend és a címkézés a terminál Shift+Tab
+ *  ciklusát követi (Manual → Accept edits → Plan → Auto), utána jön a két olyan mód, ami a
+ *  terminálban nem ciklizálható. A `manual` a CLI-ben a `default` aliasa — a terminál
+ *  státuszsorában "default" néven látszik ugyanez a mód. */
 const PERMISSION_MODE_OPTIONS = [
-  { label: 'acceptEdits', value: 'acceptEdits' },
-  { label: 'auto', value: 'auto' },
-  { label: 'bypassPermissions', value: 'bypassPermissions' },
-  { label: 'manual', value: 'manual' },
-  { label: 'dontAsk', value: 'dontAsk' },
-  { label: 'plan', value: 'plan' },
+  {
+    label: 'Manual',
+    value: 'manual',
+    description: 'Veszélyes műveleteknél engedélyt kér. A terminálban ez a „default” mód.',
+  },
+  {
+    label: 'Accept edits',
+    value: 'acceptEdits',
+    description: 'A fájlszerkesztéseket magától elfogadja, minden másra engedélyt kér.',
+  },
+  {
+    label: 'Plan',
+    value: 'plan',
+    description: 'Tervezési mód: a bot nem futtat tool-t, csak tervet készít.',
+  },
+  {
+    label: 'Auto',
+    value: 'auto',
+    description: 'Az engedélykérésekről egy modell-osztályozó dönt.',
+  },
+  {
+    label: "Don't ask",
+    value: 'dontAsk',
+    description: 'Soha nem kérdez: amit az engedélyezett tool-ok nem fednek, azt elutasítja.',
+  },
+  {
+    label: 'Bypass permissions',
+    value: 'bypassPermissions',
+    description: 'Minden engedélyellenőrzést kihagy. Csak megbízható munkamappánál.',
+  },
 ];
+
+/** Ezekben a módokban a CLI a saját engedélyfolyamatában dönt a tool-hívásokról, és el sem jut
+ *  a `--permission-prompt-tool`-ig — az interaktív jóváhagyás (UC-018) ilyenkor hatástalan.
+ *  A bot saját kérdéseit (AskUserQuestion, UC-020) viszont továbbra is ez a csatorna hozza,
+ *  ezért a kapcsolót nem tiltjuk le, csak figyelmeztetünk. */
+const MODES_WITHOUT_PROMPTING = ['dontAsk', 'bypassPermissions'];
 
 /** Skill/sub agent chipek "Megosztott" (Bots/.claude/) és workspace-specifikus csoportokra
  *  bontva — ugyanaz a subtitle+chips minta, mint az engedélyezett tool-oknál az MCP szerverek /
@@ -197,6 +231,8 @@ export function SettingsView({
   }, [isDirty, onDirtyChange]);
 
   if (!bot || !draft) return null;
+
+  const approvalIneffective = MODES_WITHOUT_PROMPTING.includes(draft.permissionMode);
 
   function requestClose() {
     if (isDirty) {
@@ -398,6 +434,13 @@ export function SettingsView({
                 Ha a bot olyan eszközt használna, ami nincs engedélyezve, a csevegésben
                 rákérdez. Kikapcsolva az ilyen hívások elutasításra kerülnek, kérdés nélkül.
               </p>
+              {approvalIneffective && (
+                <p className="settings-toggle__hint settings-toggle__hint--warning">
+                  A kiválasztott Permission mode-ban a bot nem kér tool-engedélyt — a kapcsoló
+                  ilyenkor csak a bot saját kérdéseire van hatással. Hagyd bekapcsolva, hogy
+                  azokra válaszolni tudj.
+                </p>
+              )}
             </div>
 
             <div className="settings-danger">
