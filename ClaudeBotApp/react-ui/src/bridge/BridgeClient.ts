@@ -105,6 +105,13 @@ class BridgeClient {
   sendPrompt(botId: string, text: string, attachments: EncodedAttachment[] = []): void {
     this.send({ type: 'sendPrompt', botId, text, attachments });
   }
+
+  /** Egy chat-üzenetben felismert webcím vagy fájlútvonal megnyitása. A botId azért kell, mert a
+   *  relatív útvonal a bot munkamappájához képest értendő — két bot ugyanazt a nevet más fájlra
+   *  értheti. A host dönti el, hogy megnyitható-e; ha nem, egyszerűen nem történik semmi. */
+  openLink(botId: string, target: string): void {
+    this.send({ type: 'openLink', botId, target });
+  }
 }
 
 export const bridge = new BridgeClient();

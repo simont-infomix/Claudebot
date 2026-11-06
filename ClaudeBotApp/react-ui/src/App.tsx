@@ -243,10 +243,18 @@ export default function App() {
     bridge.createBot(name);
   }
 
+  function handleOpenLink(target: string) {
+    if (!selectedBotId) return;
+    bridge.openLink(selectedBotId, target);
+  }
+
   function handleSendPrompt(text: string, attachments: EncodedAttachment[]) {
     if (!selectedBotId) return;
+    // A fájlnevek backtickben: így a csatolás-jelzésben is kattintható hivatkozás lesz belőlük
+    // (ld. MessageText). Ugyanezt a formát állítja elő a host oldali BotSession.SendPrompt is,
+    // hogy bot-váltás után, a mentett előzményből visszatöltve is ugyanígy nézzen ki.
     const attachmentNote =
-      attachments.length > 0 ? `📎 ${attachments.map((a) => a.name).join(', ')}` : '';
+      attachments.length > 0 ? `📎 ${attachments.map((a) => `\`${a.name}\``).join(', ')}` : '';
     const displayText = [text, attachmentNote].filter(Boolean).join('\n\n');
     setLogs((prev) => [...prev, { kind: 'user', text: displayText }]);
     bridge.sendPrompt(selectedBotId, text, attachments);
@@ -321,6 +329,7 @@ export default function App() {
               onAnswerQuestion={handleAnswerQuestion}
               onSkipQuestion={handleSkipQuestion}
               onSendPrompt={handleSendPrompt}
+              onOpenLink={handleOpenLink}
             />
           )}
           {mainTab === 'tasks' && (

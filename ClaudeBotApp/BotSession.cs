@@ -339,8 +339,9 @@ public class BotSession
             promptText = string.IsNullOrWhiteSpace(text) ? fileRefs : $"{text}\n\n{fileRefs}";
 
             // A history-ba ugyanaz a jelzés kerül, mint amit a React optimistán megjelenít,
-            // hogy bot-váltás után is konzisztens maradjon a megjelenítés.
-            var fileNote = $"📎 {string.Join(", ", attachmentNames!)}";
+            // hogy bot-váltás után is konzisztens maradjon a megjelenítés. A fájlnevek
+            // backtickben: ebből lesz a felületen kattintható hivatkozás (ld. MessageText.tsx).
+            var fileNote = $"📎 {string.Join(", ", attachmentNames!.Select(n => $"`{n}`"))}";
             displayText = string.IsNullOrWhiteSpace(text) ? fileNote : $"{text}\n\n{fileNote}";
         }
 

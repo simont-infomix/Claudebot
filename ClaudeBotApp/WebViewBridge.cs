@@ -174,6 +174,20 @@ public class WebViewBridge
                     }
                     break;
 
+                case "openLink":
+                    if (root.TryGetProperty("botId", out var linkBotIdProp) &&
+                        root.TryGetProperty("target", out var linkTargetProp))
+                    {
+                        var linkError = _manager.OpenChatLink(
+                            linkBotIdProp.GetString() ?? "", linkTargetProp.GetString() ?? "");
+
+                        if (linkError != null)
+                        {
+                            PostEvent(new { type = "error", message = linkError });
+                        }
+                    }
+                    break;
+
                 case "openWorkspaceFolder":
                     if (root.TryGetProperty("botId", out var folderIdProp))
                     {

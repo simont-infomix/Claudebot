@@ -8,6 +8,7 @@ import type {
   PermissionRequest,
 } from '../types';
 import { ChatInput } from './ChatInput';
+import { MessageText } from './MessageText';
 import { PermissionCard } from './PermissionCard';
 import { QuestionCard } from './QuestionCard';
 import './ChatView.css';
@@ -22,6 +23,9 @@ interface Props {
   onAnswerQuestion: (requestId: string, answers: Record<string, string | string[]>) => void;
   onSkipQuestion: (requestId: string) => void;
   onSendPrompt: (text: string, attachments: EncodedAttachment[]) => void;
+  /** Egy üzenetben felismert webcím vagy fájlútvonal megnyitása. A megnyitást a host végzi, mert
+   *  a WebView sem böngészőt, sem külső alkalmazást nem tud indítani. */
+  onOpenLink: (target: string) => void;
 }
 
 type RenderBlock =
@@ -69,6 +73,7 @@ export function ChatView({
   onAnswerQuestion,
   onSkipQuestion,
   onSendPrompt,
+  onOpenLink,
 }: Props) {
   const logEndRef = useRef<HTMLDivElement>(null);
   const [expandedOverride, setExpandedOverride] = useState<Record<string, boolean>>({});
@@ -95,7 +100,9 @@ export function ChatView({
                 const { line } = block;
                 return (
                   <div key={block.key} className={`chat-row chat-row--${line.kind}`}>
-                    <div className={`chat-bubble chat-bubble--${line.kind}`}>{line.text}</div>
+                    <div className={`chat-bubble chat-bubble--${line.kind}`}>
+                      <MessageText text={line.text} onOpen={onOpenLink} />
+                    </div>
                   </div>
                 );
               }
@@ -108,7 +115,9 @@ export function ChatView({
                 if (!entry) {
                   return (
                     <div key={block.key} className="chat-row chat-row--info">
-                      <div className="chat-bubble chat-bubble--info">{block.fallbackText}</div>
+                      <div className="chat-bubble chat-bubble--info">
+                        <MessageText text={block.fallbackText} onOpen={onOpenLink} />
+                      </div>
                     </div>
                   );
                 }
@@ -156,7 +165,7 @@ export function ChatView({
                     <div className="thinking-block__body">
                       {block.lines.map((line, idx) => (
                         <div key={idx} className="thinking-line">
-                          {line.text}
+                          <MessageText text={line.text} onOpen={onOpenLink} />
                         </div>
                       ))}
                     </div>

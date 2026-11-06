@@ -730,6 +730,97 @@ public class BotSessionManager
         Process.Start(psi);
     }
 
+    /// <summary>
+    /// Egy chat-üzenetben felismert hivatkozás megnyitása: webcím a böngészőben, fájl az
+    /// alapértelmezett alkalmazással. A relatív útvonal a bot munkamappájához képest oldódik fel —
+    /// a bot is onnan írta. Hibaüzenettel tér vissza, vagy null-lal, ha sikerült.
+    ///
+    /// A hivatkozást a felület MINTA alapján ismeri fel, tehát tévedhet is: ami nem azonosítható
+    /// webcímként vagy létező fájlként, azt csendben elengedjük — egy téves felismerés miatt ne
+    /// ugorjon fel hibaüzenet.
+    /// </summary>
+    public string? OpenChatLink(string botName, string target)
+    {
+        var trimmed = target.Trim();
+        if (trimmed.Length == 0)
+            return null;
+
+        // Csak http/https. A `file:`, `javascript:` és társaik szándékosan kimaradnak: a
+        // hivatkozás szövegét végső soron a bot állítja elő, és a séma szabad megválasztása
+        // tetszőleges protokoll-kezelő elindítását jelentené.
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            return StartShell(uri.AbsoluteUri, "A webcím megnyitása sikertelen");
+        }
+
+        var bot = FindBot(botName);
+        if (bot == null)
+            return null;
+
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(Path.Combine(bot.FolderPath, trimmed));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+
+        if (Directory.Exists(fullPath))
+            return StartShell(fullPath, "A mappa megnyitása sikertelen");
+
+        if (!File.Exists(fullPath))
+            return null;
+
+        // Futtatható fájlt nem indítunk el, csak megmutatjuk az Intézőben. A felhasználó egy
+        // beszélgetés szövegére kattint, nem programot akar futtatni — a kettő összetévesztése
+        // itt a legdrágább hiba, amit elkövethetnénk.
+        if (IsExecutable(fullPath))
+        {
+            return StartShell(
+                "explorer.exe", $"/select,\"{fullPath}\"", "A fájl megmutatása sikertelen");
+        }
+
+        return StartShell(fullPath, "A fájl megnyitása sikertelen");
+    }
+
+    private static readonly HashSet<string> ExecutableExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".exe", ".com", ".bat", ".cmd", ".ps1", ".psm1", ".msi", ".msp", ".scr", ".vbs", ".vbe",
+        ".js", ".jse", ".wsf", ".wsh", ".hta", ".cpl", ".reg", ".lnk", ".pif", ".jar",
+    };
+
+    private static bool IsExecutable(string path) =>
+        ExecutableExtensions.Contains(Path.GetExtension(path));
+
+    private static string? StartShell(string fileName, string errorPrefix) =>
+        StartShell(fileName, null, errorPrefix);
+
+    private static string? StartShell(string fileName, string? arguments, string errorPrefix)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = fileName,
+                // Ez indítja a kiterjesztéshez társított alkalmazást (és ez nyitja a böngészőt is).
+                UseShellExecute = true,
+            };
+
+            if (arguments != null)
+                psi.Arguments = arguments;
+
+            Process.Start(psi);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return $"{errorPrefix}: {ex.Message}";
+        }
+    }
+
     public void StopAll()
     {
         foreach (var bot in _bots)

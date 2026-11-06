@@ -1,0 +1,55 @@
+/* Kattintható hivatkozás a chat-üzenetekben. Nem <a>, hanem <button>: a WebView-ben egy valódi
+   href navigációt váltana ki a felületen belül — a megnyitást a host végzi. A gomb minden
+   alapértelmezett megjelenését le kell vetkőztetni, hogy a környező szöveggel egy sorban,
+   folytatólagosan tördelődjön. */
+.msg-link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--accent-primary);
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgba(0, 232, 200, 0.45);
+  text-underline-offset: 2px;
+  cursor: pointer;
+
+  /* Hosszú útvonal/URL ne feszítse szét a buborékot. */
+  word-break: break-word;
+}
+
+.msg-link:hover {
+  text-decoration-color: var(--accent-primary);
+}
+
+.msg-link:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Fájlútvonal: visszafogottabb, mert a felismerése mintára épül, és tévedhet is — ne tolakodjon
+   úgy, mint egy biztos webcím. A kódjelölés egyben azt is mutatja, hogy a bot fájlként hivatkozott
+   rá. */
+.msg-link--code {
+  color: var(--text-primary);
+  text-decoration-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+}
+
+.msg-link--code:hover {
+  background: var(--bg-surface-hover);
+  text-decoration-color: var(--accent-primary);
+}
+
+/* Backtickes szöveg, ami NEM útvonal (tool-nevek, paraméterek) — csak jelölés, nem kattintható. */
+.msg-code {
+  font: inherit;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+}
