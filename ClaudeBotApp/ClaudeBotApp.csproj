@@ -11,7 +11,7 @@
 
     <!-- Az exe Fájl tulajdonságai lapján (Intéző → jobbklikk → Tulajdonságok → Részletek)
          megjelenő azonosító adatok — enélkül "1.0.0.0", névtelen termékként jelenne meg. -->
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <AssemblyTitle>ClaudeBot</AssemblyTitle>
     <Product>ClaudeBot</Product>
     <Description>Claude Code botokat futtató és ütemező asztali alkalmazás</Description>
