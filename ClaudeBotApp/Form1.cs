@@ -240,6 +240,22 @@ public partial class Form1 : Form
         _bridge?.SetWindowVisible(false);
     }
 
+    /// <summary>Egy második indítás jelzésére hozzuk elő az ablakot (ADR-0003): a felhasználó
+    /// azért indította el újra az alkalmazást, mert nem látta, hogy már fut — a tálcára rejtett
+    /// ablak előhozása pontosan az, amit várt. Az üzenet a rendszer minden legfelső szintű
+    /// ablakának megy, ezért a 0 (sikertelen regisztráció) esetet külön ki kell zárni, különben
+    /// minden ismeretlen üzenetre reagálnánk.</summary>
+    protected override void WndProc(ref Message m)
+    {
+        if (SingleInstance.ShowWindowMessage != 0 && m.Msg == SingleInstance.ShowWindowMessage)
+        {
+            RestoreFromTray();
+            return;
+        }
+
+        base.WndProc(ref m);
+    }
+
     private void RestoreFromTray()
     {
         Show();
@@ -248,6 +264,7 @@ public partial class Form1 : Form
             WindowState = FormWindowState.Normal;
 
         Activate();
+        SingleInstance.BringToFront(Handle);
         _bridge?.SetWindowVisible(true);
 
         // A taskbar-gomb az ablak elrejtésekor eltűnik, visszaállításkor újra létrejön — az

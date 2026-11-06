@@ -2,9 +2,9 @@
 id: decision-03
 title: "ADR-0003 — Az ablak bezárása a tálcára rejt, az automatikus indítás kapcsolható"
 type: adr
-version: 0.1.0
+version: 0.2.0
 created: 2026-10-29
-updated: 2026-10-29
+updated: 2026-11-06
 references:
   - decision-02
   - decision-01
@@ -47,6 +47,20 @@ references:
    olvassuk, nem gyorsítótárazott értékből. Induláskor a bejegyzett útvonalat az aktuális
    exe-útvonalra frissítjük, ha az automatikus indítás be van kapcsolva.
 
+   **Kiegészítés (2026-11-06): buildváltozatonként egyetlen példány futhat.** A tálcára rejtés
+   egyenes következménye, hogy a felhasználó nem feltétlenül látja, hogy a program már fut, és
+   újraindítva egy teljesen önálló második folyamat keletkezne — ugyanarra a `Bots/` mappára, két
+   ütemezővel (vagyis duplán futó feladatokkal) és két íróval ugyanazokon a meta-fájlokon. Ezért
+   az indulás első lépése egy munkamenet-szintű, névvel ellátott mutex megszerzése; ha az már
+   foglalt, az új folyamat nem indul el, hanem egy rendszerszinten egyedi ablak-üzenettel előhozza
+   a futó példány ablakát (a tálcáról is), majd kilép.
+
+   A **Debug és a Release build külön példánynak számít** (külön mutex- és üzenetnév): más
+   mappából futnak, saját `Bots/` mappával, és fejlesztés közben a telepített példány mellett kell
+   tudni futtatni a frissen fordítottat. Egy változatból viszont továbbra sem futhat kettő. A zár
+   hatóköre a Windows-munkamenet (`Local\`) és nem a gép (`Global\`): egy gépen több felhasználó
+   párhuzamosan dolgozhat, és az előtérbe hozó üzenet sem jutna át a munkamenet határán.
+
 5. **Alternatives considered:**
 
    **A) Marad az ADR-0002 szerinti állapot (X = kilépés, kötelező autostart)**
@@ -79,7 +93,9 @@ references:
    aki nem tudja, hogy a tálcán keresendő, azt hiheti, bezárta; a fejlesztés alatt egy build előtt
    a futó példányt külön le kell állítani (tálcamenü vagy folyamat-leállítás), mert zárolja az
    exe-t; a tálcaikonra rejtés után a Windows leállítása mentetlen beállítás-piszkozatot eldobhat
-   kérdés nélkül.
+   kérdés nélkül. A példány-zár hozzáteszi, hogy ugyanabból a buildváltozatból **szándékosan sem**
+   indítható két példány — akkor sem, ha valaki két külön mappába telepítené és külön `Bots/`
+   mappával futtatná őket.
 
    **Neutral, but worth knowing:** a jelölő érték külön kulcsban (`HKCU\Software\ClaudeBot`) él,
    nem a `Run` kulcsban — a `Run` érték törlése ezért nem „felejti el" a kezdeti beállítást, és
@@ -92,6 +108,8 @@ references:
    - [x] „Indítás a Windows-szal" pipás menüpont, a tényleges regisztrációs állapot alapján.
    - [x] Egyszeri kezdeti bekapcsolás jelölő értékkel, hogy a kikapcsolás tartós maradjon.
    - [x] A bejegyzett exe-útvonal frissítése induláskor.
+   - [x] Buildváltozatonként egyetlen példány; a második indítás a futó ablakát hozza elő.
 
 8. **References:** `ClaudeBotApp/Form1.cs`, `ClaudeBotApp/Form1.Designer.cs`,
-   `ClaudeBotApp/WindowsAutostart.cs`, ADR-0002 (felülírva), ADR-0001.
+   `ClaudeBotApp/WindowsAutostart.cs`, `ClaudeBotApp/SingleInstance.cs`,
+   `ClaudeBotApp/Program.cs`, ADR-0002 (felülírva), ADR-0001.

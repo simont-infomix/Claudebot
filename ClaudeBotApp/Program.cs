@@ -8,6 +8,24 @@ static class Program
     [STAThread]
     static void Main()
     {
+        // Buildváltozatonként egyetlen példány (ADR-0003). Ez az első dolgunk: ha már fut egy
+        // példány, csak előhozzuk az ablakát, és minden további indulási lépés értelmetlen.
+        // A mutexet a Main teljes futása alatt életben kell tartani — a `using` pontosan addig
+        // tartja, ameddig az Application.Run tart.
+        if (!SingleInstance.TryAcquire(out var instanceMutex))
+        {
+            SingleInstance.SignalExistingInstance();
+            return;
+        }
+
+        using (instanceMutex)
+        {
+            Run();
+        }
+    }
+
+    private static void Run()
+    {
         // To customize application configuration such as set high DPI settings or default font,
         // see https://aka.ms/applicationconfiguration.
         ApplicationConfiguration.Initialize();
