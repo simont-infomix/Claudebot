@@ -58,13 +58,19 @@ public sealed class ChannelMcpServer
             builder.Services.AddSingleton(_backend);
             builder.Services.AddScoped<CallerBotAccessor>();
             builder.Services.AddScoped<ChannelTools>();
+            builder.Services.AddScoped<BotTaskTools>();
 
             // Stateless mód: minden tool-hívás önálló HTTP kérés, a saját DI-scope-jában fut —
             // így a hívó bot kiléte (scoped CallerBotAccessor) megbízhatóan eljut a tool-ig.
+            // A feladat-eszközök (UC-022) szándékosan ugyanezen a szerveren élnek: ugyanaz a
+            // token-alapú azonosítás kell nekik, és a bot így is csak a sajátjait éri el. Hogy
+            // mégsem mind engedélyezett automatikusan, azt a tool-szintű engedélyszabályok adják
+            // (ld. HostToolNames.AlwaysAllowed), nem a szerverek szétválasztása.
             builder.Services
                 .AddMcpServer()
                 .WithHttpTransport(options => options.Stateless = true)
-                .WithTools<ChannelTools>();
+                .WithTools<ChannelTools>()
+                .WithTools<BotTaskTools>();
 
             var app = builder.Build();
 
@@ -156,6 +162,38 @@ public sealed class CallerBotAccessor
 }
 
 /// <summary>
+/// A hoszt MCP szerverének tool-nevei egy helyen. Azért konstansok, mert két helyen kell
+/// pontosan egyezniük: a tool-ok <see cref="McpServerToolAttribute"/> nevében, és a bot indítási
+/// parancssorában felsorolt engedélyszabályokban (<see cref="AlwaysAllowed"/>). Egy elgépelés
+/// ott nem fordítási hibaként, hanem némán jóváhagyás-köteles vagy soha nem engedélyezett
+/// eszközként jelentkezne.
+/// </summary>
+public static class HostToolNames
+{
+    public const string ListBots = "list_bots";
+    public const string SendMessage = "send_message";
+    public const string RecentMessages = "recent_messages";
+    public const string ListTasks = "list_tasks";
+    public const string AddTask = "add_task";
+    public const string UpdateTask = "update_task";
+
+    /// <summary>
+    /// Amit a bot a felhasználó jóváhagyása nélkül hívhat. A csatorna eszközei azért vannak itt,
+    /// mert a bot-bot üzenetváltás szándékosan nem jóváhagyás-köteles (ADR-0005), a
+    /// <see cref="ListTasks"/> pedig azért, mert csak olvas — a bot éjszakai, felügyelet nélküli
+    /// körben is meg tudja nézni, mi a dolga.
+    ///
+    /// Ami NINCS itt (<see cref="AddTask"/>, <see cref="UpdateTask"/>), az a futásidejű jóváhagyási
+    /// csatornán (UC-018) megy: a bot a felhasználó beleegyezése nélkül nem írhatja át a saját
+    /// ütemezéseit.
+    /// </summary>
+    public static readonly IReadOnlyList<string> AlwaysAllowed = new[]
+    {
+        ListBots, SendMessage, RecentMessages, ListTasks,
+    };
+}
+
+/// <summary>
 /// A botok számára látható tool-ok. Ez az egyetlen hely, ahonnan a bot megtudja, hogyan működik a
 /// csatorna — ezért a leírások szándékosan bőbeszédűek, és magukban hordozzák a használati
 /// etikettet is.
@@ -172,7 +210,7 @@ public sealed class ChannelTools
         _caller = caller;
     }
 
-    [McpServerTool(Name = "list_bots", ReadOnly = true),
+    [McpServerTool(Name = HostToolNames.ListBots, ReadOnly = true),
      Description("Felsorolja a többi botot a közös csatornán: a nevüket, azt hogy éppen futnak-e, " +
                  "és — ha definiálva van — azt is, hogy mivel foglalkoznak. Ezzel tudod eldönteni, " +
                  "kinek érdemes feladatot delegálni vagy kérdést feltenni.")]
@@ -199,7 +237,7 @@ public sealed class ChannelTools
         return string.Join("\n", lines);
     }
 
-    [McpServerTool(Name = "send_message"),
+    [McpServerTool(Name = HostToolNames.SendMessage),
      Description("Üzenetet — és ha kell, fájlokat — küld a többi botnak a közös csatornán: feladat " +
                  "delegálása, kérdés, vagy egy korábbi kérdésre adott válasz. A kommunikáció " +
                  "ASZINKRON — ez a hívás azonnal visszatér, a címzett válasza (ha válaszol) később, " +
@@ -224,7 +262,7 @@ public sealed class ChannelTools
         return bus.Publish(caller, message, to, files);
     }
 
-    [McpServerTool(Name = "recent_messages", ReadOnly = true),
+    [McpServerTool(Name = HostToolNames.RecentMessages, ReadOnly = true),
      Description("Visszaadja a csatorna legutóbbi üzeneteit — azokat is, amiket nem te kaptál meg " +
                  "(például mert éppen nem futottál). Akkor hasznos, ha fel akarsz zárkózni arra, " +
                  "miről beszélgettek a botok.")]

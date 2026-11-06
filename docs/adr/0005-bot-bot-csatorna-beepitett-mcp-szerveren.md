@@ -2,13 +2,14 @@
 id: decision-05
 title: "ADR-0005 — Bot-bot üzenetcsatorna a hosztba épített MCP szerveren"
 type: adr
-version: 0.2.0
+version: 0.2.1
 created: 2026-11-02
 updated: 2026-11-05
 references:
   - uc-009
   - uc-021
   - decision-04
+  - decision-06
   - architecture-c3-winforms-host
   - architecture-c3-claude-code-cli-session
 ---
@@ -74,10 +75,12 @@ valósítják meg**, a következő kiegészítésekkel:
    `agent.md` első érdemi sorából), `send_message` (üzenet opcionális címzett-listával és
    opcionális fájlokkal), `recent_messages` (felzárkózás arra, amit a bot kihagyott).
 6. **A csatorna eszközei mindig engedélyezettek**, a bot saját `AllowedTools` listájától
-   függetlenül (a szerver-szintű `mcp__claudebots` szabállyal). A bot-bot üzenetváltás szándékosan
-   nem jóváhagyás-köteles: különben minden delegálás megállna, amíg nincs valaki a gép előtt. A
-   szabály **nem** íródik vissza a mentett `AllowedTools`-ba — az a felhasználó beállítása, ez
-   pedig a rendszer saját, belső képessége.
+   függetlenül. A bot-bot üzenetváltás szándékosan nem jóváhagyás-köteles: különben minden
+   delegálás megállna, amíg nincs valaki a gép előtt. A szabály **nem** íródik vissza a mentett
+   `AllowedTools`-ba — az a felhasználó beállítása, ez pedig a rendszer saját, belső képessége.
+   *(Az engedély eredetileg szerver-szintű `mcp__claudebots` szabállyal ment ki. Amióta ugyanezen
+   a szerveren jóváhagyás-köteles eszközök is élnek, eszközönkénti szabály megy helyette —
+   ADR-0006.)*
 7. **A csatorna nincs particionálva.** Egyetlen közös busz van; a `to` lista csak azt szűkíti,
    kinek kézbesítünk, nem külön csatornákat hoz létre. Címzés nélkül minden másik bot megkapja.
 8. **Aszinkron üzenetváltás.** A `send_message` azonnal visszatér azzal, kihez jutott el az üzenet

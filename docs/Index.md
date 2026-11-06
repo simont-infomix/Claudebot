@@ -23,6 +23,7 @@
 | uc-019 | UC-019 — Megosztott skill vagy sub agent felvétele minden bot számára | use-case | docs/use-cases/uc-019-megosztott-skill-sub-agent-felvetele.md |
 | uc-020 | UC-020 — Bot kérdésének megválaszolása (AskUserQuestion) | use-case | docs/use-cases/uc-020-bot-kerdesenek-megvalaszolasa.md |
 | uc-021 | UC-021 — Feladat delegálása vagy kérdés feltevése egy másik botnak | use-case | docs/use-cases/uc-021-feladat-delegalasa-masik-botnak.md |
+| uc-022 | UC-022 — Bot megnézi vagy módosítja a saját ütemezett feladatait | use-case | docs/use-cases/uc-022-bot-sajat-feladatainak-kezelese.md |
 | architecture-c1 | Architektúra diagram — C1 (System Context) | architecture-c1 | docs/architecture-c1.md |
 | architecture-c2-claude-bot | Architektúra diagram — C2 (Container) – ClaudeBot | architecture-c2 | docs/architecture-c2/claude-bot.md |
 | architecture-c3-winforms-host | Architektúra diagram — C3 (Component) – WinForms Host | architecture-c3 | docs/architecture-c3/winforms-host.md |
@@ -35,3 +36,4 @@
 | decision-03 | ADR-0003 — Az ablak bezárása a tálcára rejt, az automatikus indítás kapcsolható | adr | docs/adr/0003-talcara-rejtes-es-kapcsolhato-autostart.md |
 | decision-04 | ADR-0004 — Interaktív tool-jóváhagyás a claude.exe stdio control-protokollján | adr | docs/adr/0004-interaktiv-jovahagyas-a-cli-control-protokollon.md |
 | decision-05 | ADR-0005 — Bot-bot üzenetcsatorna a hosztba épített MCP szerveren | adr | docs/adr/0005-bot-bot-csatorna-beepitett-mcp-szerveren.md |
+| decision-06 | ADR-0006 — A bot a saját ütemezett feladatait a hoszt MCP szerverén kezeli, tool-szintű engedéllyel | adr | docs/adr/0006-bot-sajat-feladatai-mcp-toolokon.md |

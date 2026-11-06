@@ -233,15 +233,20 @@ public class BotSession
         // némán elutasításra kerül. Az AllowedTools-ot a Settings felületen bot-onként lehet
         // karbantartani (lásd BotSessionManager.ApplySettings).
         //
-        // A csatorna tool-jai (UC-021) mindig bekerülnek, a bot saját listájától függetlenül:
-        // a bot-bot üzenetváltás szándékosan nem jóváhagyás-köteles, különben minden delegálás
-        // megállna, amíg nincs valaki a gép előtt. A csatornát a ChannelEnabled kapcsolja ki,
-        // nem az engedélylista. A szerver-szintű szabály (`mcp__<szerver>`) az adott szerver
-        // MINDEN tool-ját fedi. A lista szándékosan NEM íródik vissza az AllowedTools-ba: az a
-        // felhasználó beállítása, ez pedig a rendszer saját, belső képessége.
+        // A hoszt saját MCP szerverének eszközei közül azok kerülnek be, amiket a bot jóváhagyás
+        // nélkül hívhat (HostToolNames.AlwaysAllowed): a csatorna eszközei (UC-021), mert a
+        // bot-bot üzenetváltás különben megállna, amíg nincs valaki a gép előtt, és a feladatok
+        // OLVASÁSA (UC-022). A feladat-írás szándékosan kimarad: azt a felhasználónak kell
+        // jóváhagynia (UC-018). Szerver-szintű szabály (`mcp__<szerver>`) ezért nem használható,
+        // mert az a szerver minden eszközét fedné — a tool-szintű szabály viszont pontosan egy
+        // eszközre hat. A lista szándékosan NEM íródik vissza az AllowedTools-ba: az a felhasználó
+        // beállítása, ez pedig a rendszer saját, belső képessége.
         var effectiveAllowedTools = new List<string>(AllowedTools);
         if (!string.IsNullOrWhiteSpace(ChannelMcpUrl))
-            effectiveAllowedTools.Add($"mcp__{ChannelMcpServerName}");
+        {
+            effectiveAllowedTools.AddRange(
+                HostToolNames.AlwaysAllowed.Select(t => $"mcp__{ChannelMcpServerName}__{t}"));
+        }
 
         if (effectiveAllowedTools.Count > 0)
         {
@@ -469,6 +474,11 @@ public class BotSession
     /// <summary>Csatorna-esemény beírása a bot csevegésébe (UC-021) — ezen keresztül kerül be a
     /// KIMENŐ üzenet is a küldő folyamába, hiszen azt nem a claude.exe kimenete hozza.</summary>
     public void LogChannelActivity(string text) => RaiseLog(LogKind.Channel, text);
+
+    /// <summary>Feladat-változás beírása a bot csevegésébe (UC-022). Azért kell külön jelzés, mert
+    /// a felhasználó a tartós engedély megadása után már nem látna jóváhagyási kártyát: enélkül a
+    /// bot némán alakítaná át a saját ütemezéseit, és az csak a Feladatok fülön derülne ki.</summary>
+    public void LogTaskActivity(string text) => RaiseLog(LogKind.Info, text);
 
     /// <summary>true-ra állítja a jelzőt, ha korábban false volt. A visszatérési érték mondja meg
     /// a hívónak, hogy ténylegesen VÁLTOZOTT-e az állapot — erre épül, hogy a feliratkozóknak

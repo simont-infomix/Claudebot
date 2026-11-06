@@ -35,6 +35,11 @@ public class BotSessionManager
     /// viszont a UI-szálról.</summary>
     private readonly ConcurrentDictionary<string, BotSession> _channelTokens = new();
 
+    /// <summary>A botok feladatlistájának cseréjét sorosítja. A botok a saját MCP-hívásuk szálán
+    /// módosíthatják a feladataikat (UC-022), a felület és a scheduler viszont a UI-szálról
+    /// olvassa ugyanezeket a listákat.</summary>
+    private readonly object _taskGate = new();
+
     public event Action? BotListChanged;
     public event Action<BotSession, LogLine>? LogReceived;
     public event Action<BotSession, BotStatus>? BotStatusChanged;
@@ -186,6 +191,45 @@ public class BotSessionManager
     {
         SaveMeta(bot);
         BotListChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Új ütemezett feladat felvétele a bot saját kérésére (UC-022). A lista nem helyben bővül,
+    /// hanem kicserélődik: a felvétel a bot MCP-hívásának szálán fut, míg a scheduler és a felület
+    /// a UI-szálon olvassa ugyanezt a listát. Egy helyben módosított gyűjtemény ilyenkor
+    /// kivételt dobhatna az olvasó oldalon, a referencia-csere viszont atomi — az olvasó vagy a
+    /// régi, vagy az új listát látja, félkész állapotot soha.
+    /// </summary>
+    public void AddScheduledTask(BotSession bot, ScheduledTask task)
+    {
+        lock (_taskGate)
+        {
+            bot.ScheduledTasks = new List<ScheduledTask>(bot.ScheduledTasks) { task };
+        }
+
+        PersistBot(bot);
+    }
+
+    /// <summary>
+    /// Meglévő feladat módosítása azonosító alapján, a bot saját kérésére (UC-022). Hamis
+    /// visszatérés = nincs ilyen azonosítójú feladata. A <paramref name="apply"/> a zároláson
+    /// belül fut, így két egyidejű módosítás nem írhatja felül egymást.
+    /// </summary>
+    public bool UpdateScheduledTask(BotSession bot, string taskId, Action<ScheduledTask> apply)
+    {
+        lock (_taskGate)
+        {
+            var updated = new List<ScheduledTask>(bot.ScheduledTasks);
+            var task = updated.FirstOrDefault(t => t.Id == taskId);
+            if (task == null)
+                return false;
+
+            apply(task);
+            bot.ScheduledTasks = updated;
+        }
+
+        PersistBot(bot);
+        return true;
     }
 
     /// <summary>
