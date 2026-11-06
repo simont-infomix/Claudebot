@@ -1,1 +1,4 @@
 *.lnk
+
+# Kiadási csomagok (a GitHub release-hez készülnek, nem a repóba valók)
+dist/
