@@ -70,11 +70,33 @@
     <Exec Command="npm run build" WorkingDirectory="$(ReactUiDir)" />
   </Target>
 
+  <!-- A lefordított React UI a kimenet webui\ mappájába kerül — a WebView innen szolgálja ki a
+       felületet (ld. Form1.SetVirtualHostNameToFolderMapping).
+
+       A build és a publish külön kezelése szándékos, nem redundancia. A dist\ tartalma csak a build
+       KÖZBEN keletkezik (BuildReactUi), ezért egy statikus ItemGroup vagy egy AssignTargetPaths
+       idejű ContentWithTargetPath még üres mappát látna: tiszta forrásfából fordítva a webui
+       kimaradna a kimenetből. Mindkét target ezért olyan pontra van időzítve, ahol a dist\ már
+       biztosan kész. -->
   <Target Name="CopyReactUiOutput" AfterTargets="Build" Condition="Exists('$(ReactUiDir)\dist')">
     <ItemGroup>
       <ReactUiFiles Include="$(ReactUiDir)\dist\**\*.*" />
     </ItemGroup>
     <Copy SourceFiles="@(ReactUiFiles)" DestinationFolder="$(OutDir)webui\%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- A publish nem a build kimenetét másolja tovább, hanem saját fájllistát számol — a fenti
+       target eredménye ezért nem jut el oda magától. E nélkül a `dotnet publish` csomagja
+       felhasználói felület nélkül, üres ablakkal indulna. A ComputeFilesToPublish után a lista már
+       összeállt, és a Build (vele a React fordítása) is lefutott. -->
+  <Target Name="AddReactUiToPublish" AfterTargets="ComputeFilesToPublish" Condition="Exists('$(ReactUiDir)\dist')">
+    <ItemGroup>
+      <ReactUiPublishFiles Include="$(ReactUiDir)\dist\**\*.*" />
+      <ResolvedFileToPublish Include="@(ReactUiPublishFiles)">
+        <RelativePath>webui\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
   </Target>
 
 </Project>
