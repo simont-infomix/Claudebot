@@ -36,6 +36,9 @@ export default function App() {
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
+  /** Mentetlen Settings-piszkozat miatt megerősítésre váró navigáció (botváltás, és ami vele jár).
+   *  Amíg nem null, a megerősítő dialógus látszik; a végrehajtása a felhasználó döntésén múlik. */
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
   const [botDetails, setBotDetails] = useState<BotDetails | null>(null);
   const [taskEditorOpen, setTaskEditorOpen] = useState(false);
   const [taskBeingEdited, setTaskBeingEdited] = useState<ScheduledTask | null>(null);
@@ -173,7 +176,9 @@ export default function App() {
     return unsubscribe;
   }, [selectedBotId]);
 
-  function handleSelectBot(botId: string) {
+  /** A tényleges botváltás, ellenőrzés nélkül. Csak a `guardUnsavedSettings`-en keresztül
+   *  hívandó, különben egy mentetlen Settings-piszkozat némán elveszne. */
+  function selectBotNow(botId: string) {
     setSelectedBotId(botId);
     setLogs([]);
     setSettingsOpen(false);
@@ -185,18 +190,43 @@ export default function App() {
     bridge.selectBot(botId);
   }
 
+  /**
+   * Botváltás előtt megerősítést kér, ha a Settings lapon mentetlen módosítás van — a váltás
+   * ugyanis bezárja a lapot, és a piszkozat elveszne. Ugyanaz a védelem, mint a Settings lap ×
+   * gombjánál és az alkalmazás bezárásánál, csak itt a navigáció a kiváltó esemény.
+   *
+   * A szándékot (nem csak a cél-botot) függvényként tároljuk, mert a hívók nem egyformák: van,
+   * amelyik a váltás után megnyitja a Settings lapot vagy a Feladatok nézetet is.
+   */
+  function guardUnsavedSettings(action: () => void) {
+    if (settingsDirty) {
+      setPendingNavigation(() => action);
+      return;
+    }
+
+    action();
+  }
+
+  function handleSelectBot(botId: string) {
+    guardUnsavedSettings(() => selectBotNow(botId));
+  }
+
   function handleOpenSettings(botId: string, tab: SettingsTab) {
-    handleSelectBot(botId);
-    setSettingsTab(tab);
-    setSettingsOpen(true);
-    bridge.getBotDetails(botId);
+    guardUnsavedSettings(() => {
+      selectBotNow(botId);
+      setSettingsTab(tab);
+      setSettingsOpen(true);
+      bridge.getBotDetails(botId);
+    });
   }
 
   // A jobbklikk-menü "Feladatok" gyorslinkje és a fő tab-sáv "Feladatok" tabja ugyanide vezet —
   // ez immár nem a Settings lap egyik füle, hanem a fő tartalomterület önálló nézete.
   function handleOpenTasks(botId: string) {
-    handleSelectBot(botId);
-    setMainTab('tasks');
+    guardUnsavedSettings(() => {
+      selectBotNow(botId);
+      setMainTab('tasks');
+    });
   }
 
   // A fő tab-sáv jobb szélén lévő fogaskerék-ikon nyitja meg a Settings lapot a JELENLEG
@@ -398,6 +428,21 @@ export default function App() {
             // jelenik meg. Sikeres törléskor a bot eltűnése zárja be (ld. botList kezelése).
             setPendingDeleteBotId(selectedBot.id);
             bridge.deleteBot(selectedBot.id);
+          }}
+        />
+      )}
+      {pendingNavigation && (
+        <ConfirmDialog
+          title="Mentetlen módosítások"
+          message="A Settings lapon mentetlen módosítások vannak, és a botváltás bezárja a lapot. Biztosan folytatod mentés nélkül?"
+          confirmLabel="Folytatás mentés nélkül"
+          onCancel={() => setPendingNavigation(null)}
+          onConfirm={() => {
+            // A jelzőt azonnal töröljük: a Settings lap csak a következő renderben kapja meg az
+            // új bot piszkozatát, addig a régi (mentetlen) állapot alapján még dirty-t jelentene.
+            setSettingsDirty(false);
+            pendingNavigation();
+            setPendingNavigation(null);
           }}
         />
       )}

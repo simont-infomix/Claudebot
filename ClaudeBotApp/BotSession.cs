@@ -1177,6 +1177,11 @@ public class BotSession
     // Minden nyers stream-json sor (ki- és bemenet is) egy fájlba kerül a bot workspace-ében —
     // ez teszi lehetővé, hogy diagnosztizálni lehessen, pontosan mit küld a claude.exe olyan
     // esetekben (pl. tool-engedélyezési kérés), amiket a UI még nem jelenít meg strukturáltan.
+    //
+    // KIZÁRÓLAG Debug buildben (UC-007). Élesben ez a napló korlátlanul nőne, és a teljes nyers
+    // forgalmat — benne a prompt-szövegekkel és a bot válaszaival — kiírná a lemezre, amire a
+    // felhasználónak nincs szüksége, és amit nem is kért.
+    [Conditional("DEBUG")]
     private void LogDebug(string direction, string text)
     {
         // A naplóba több szálról írunk (a kimenetet olvasó szál és az írók), ezért zárolni kell:

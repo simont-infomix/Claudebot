@@ -2,9 +2,9 @@
 id: uc-007
 title: "UC-007 — Bot nyers kommunikációjának visszakeresése hibakereséshez (debug napló)"
 type: use-case
-version: 0.1.0
+version: 0.2.0
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-11-06
 references:
   - architecture-c3-claude-code-cli-session
   - architecture-c3-bot-workspace
@@ -17,8 +17,10 @@ references:
    küldött/kapott a `claude.exe` egy adott bot session során, hogy diagnosztizáljon egy olyan
    jelenséget, amit a chat-UI nem jelenít meg strukturáltan (pl. egy néma tool-engedély
    elutasítást).
-   - **2.1 Precondition:** A bot legalább egyszer elindult és kapott/küldött legalább egy
-     stream-json sort.
+   - **2.1 Precondition:** A bot **Debug buildből** fut, és legalább egyszer elindult, illetve
+     kapott/küldött legalább egy stream-json sort. A napló kizárólag fejlesztői eszköz: a
+     telepített (Release) alkalmazás nem írja — élesben korlátlanul nőne, és a teljes nyers
+     forgalmat, benne a prompt-szövegekkel, szükségtelenül perzisztálná.
    - **2.2 Exclusions:** Nem tárgyalja a napló tartalmának UI-beli megjelenítését — a naplót a
      felhasználó/agent közvetlenül a fájlrendszeren olvassa, a ClaudeBotApp nem jeleníti meg.
 
@@ -38,7 +40,8 @@ flowchart TD
 ```
 
 5. **Potential errors:** A napló fájl még nem létezik, ha a bot még sosem kapott promptot →
-   nincs mit visszakeresni.
+   nincs mit visszakeresni. Telepített (Release) alkalmazásnál a napló egyáltalán nem keletkezik
+   → a jelenséget Debug buildből futtatva kell újra előidézni.
 
 6. **Expected outcome:** Az actor pontosan látja, milyen sorrendben, milyen tartalommal zajlott a
    `claude.exe` és a host közti kommunikáció, és ez alapján azonosítja a hiba okát.
